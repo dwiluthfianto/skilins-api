@@ -14,7 +14,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { MajorsService } from './majors.service';
+import { MajorService } from './majors.service';
 import { CreateMajorDto } from './dto/create-major.dto';
 import { UpdateMajorDto } from './dto/update-major.dto';
 import {
@@ -30,17 +30,16 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { SupabaseService } from 'src/supabase';
-import { ContentFileEnum } from '../contents/content-file.enum';
 import { Response } from 'express';
+import { FileUploadService } from '../file-upload/file-upload.service';
 @ApiTags('Major')
-@Controller({ path: 'api/v1/majors', version: '1' })
+@Controller({ path: 'majors', version: '1' })
 @ApiBasicAuth('JWT-auth')
 @Roles('Staff')
-export class MajorsController {
+export class MajorController {
   constructor(
-    private readonly majorsService: MajorsService,
-    private readonly supabaseService: SupabaseService,
+    private readonly majorService: MajorService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -50,70 +49,32 @@ export class MajorsController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image_url' }, { name: 'avatar_url' }]),
+    FileFieldsInterceptor([{ name: 'image' }, { name: 'avatar' }]),
   )
   @ApiConsumes('multipart/form-data')
   async create(
     @UploadedFiles()
     files: {
-      image_url?: Express.Multer.File[];
-      avatar_url?: Express.Multer.File[];
+      image: Express.Multer.File;
+      avatar: Express.Multer.File;
     },
     @Body() createMajorDto: CreateMajorDto,
     @Res() res: Response,
   ) {
-    let imageFilename: string;
-    let avatarFilename: string;
     try {
-      if (files.image_url && files.image_url.length > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            files.image_url[0],
-            `skilins_storage/${ContentFileEnum.major}`,
-          );
+      const image = this.fileUploadService.handleFileUpload(files.image);
+      createMajorDto.image = image.filePath;
 
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        imageFilename = fileName;
-        createMajorDto.image_url = url;
-      }
-
-      if (files.avatar_url && files.avatar_url.length > 0) {
-        const {
-          success: fileSuccess,
-          url: fileUrl,
-          fileName: fileUrlFilename,
-          error: fileError,
-        } = await this.supabaseService.uploadFile(
-          files.avatar_url[0],
-          `skilins_storage/${ContentFileEnum.avatar}`,
-        );
-
-        if (!fileSuccess) {
-          throw new Error(`Failed to upload file: ${fileError}`);
-        }
-        avatarFilename = fileUrlFilename;
-        createMajorDto.avatar_url = fileUrl;
-      }
-      const result = await this.majorsService.create(createMajorDto);
+      const avatar = this.fileUploadService.handleFileUpload(files.avatar);
+      createMajorDto.avatar = avatar.filePath;
+      const result = await this.majorService.create(createMajorDto);
       return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
-      console.error('Error during audio podcast creation:', e.message);
-
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.major}${imageFilename}`,
-        `${ContentFileEnum.avatar}${avatarFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
+      console.error('Error during major creation:', e.message);
 
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
-        message: 'Failed to create major and cleaned up uploaded files.',
+        message: 'Failed to create major.',
         detail: e.message,
       });
     }
@@ -132,67 +93,55 @@ export class MajorsController {
   })
   @HttpCode(HttpStatus.OK)
   findAll(@Query('search') search: string) {
-    return this.majorsService.findAll(search);
+    return this.majorService.findAllMajor(search);
   }
 
-  @Get(':uuid')
+  @Get(':majorUuid')
   @ApiOkResponse({
     type: Major,
   })
   @HttpCode(HttpStatus.OK)
-  findOne(@Param('uuid') uuid: string) {
-    return this.majorsService.findOne(uuid);
+  findOne(@Param('majorUuid') majorUuid: string) {
+    return this.majorService.removeMajorByUuid(majorUuid);
   }
 
-  @Patch(':uuid')
+  @Patch(':majorUuid')
   @ApiOkResponse({
     type: Major,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image_url' }, { name: 'avatar_url' }]),
+    FileFieldsInterceptor([{ name: 'image' }, { name: 'avatar' }]),
   )
   @ApiConsumes('multipart/form-data')
   async update(
-    @Param('uuid') uuid: string,
+    @Param('majorUuid') majorUuid: string,
     @UploadedFiles()
     files: {
-      image_url?: Express.Multer.File[];
-      avatar_url?: Express.Multer.File[];
+      image: Express.Multer.File;
+      avatar: Express.Multer.File;
     },
     @Body() updateMajorDto: UpdateMajorDto,
     @Res() res: Response,
   ) {
     try {
-      const isExist = await this.majorsService.findOne(uuid);
+      const isExist = await this.majorService.findMajorByUuid(majorUuid);
 
-      if (files.avatar_url && files.avatar_url.length > 0) {
-        const avatarFilename = isExist.data.avatar_url.split('/').pop();
+      const image = this.fileUploadService.updateFile(
+        isExist.data.image,
+        files.image,
+      );
+      updateMajorDto.image = image.filePath;
 
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.avatar}${avatarFilename}`,
-          files.avatar_url[0],
-        );
+      const avatar = this.fileUploadService.updateFile(
+        isExist.data.avatar,
+        files.avatar,
+      );
+      updateMajorDto.avatar = avatar.filePath;
 
-        if (!success) {
-          throw new Error(`Failed to update avatar: ${error}`);
-        }
-      }
-
-      if (files.image_url && files.image_url.length > 0) {
-        const imageFilename = isExist.data.image_url.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.major}${imageFilename}`,
-          files.image_url[0],
-        );
-        if (!success) {
-          throw new Error(`Failed to update avatar: ${error}`);
-        }
-      }
-
-      const updatedMajor = await this.majorsService.update(
-        uuid,
+      const updatedMajor = await this.majorService.updateMajorByUuid(
+        majorUuid,
         updateMajorDto,
       );
 
@@ -207,34 +156,29 @@ export class MajorsController {
     }
   }
 
-  @Delete(':uuid')
+  @Delete(':majorUuid')
   @ApiOkResponse({
     type: Major,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string) {
-    const isExist = await this.majorsService.findOne(uuid);
-    const avatarFilename = isExist?.data?.avatar_url
-      ? isExist.data.avatar_url.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    const imageFilename = isExist?.data?.image_url
-      ? isExist.data.image_url.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    if (isExist) {
-      const major = await this.majorsService.remove(uuid);
-      if (major.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.avatar}${avatarFilename}`,
-          `${ContentFileEnum.major}${imageFilename}`,
-        ]);
+  async remove(@Param('majorUuid') majorUuid: string, @Res() res: Response) {
+    try {
+      const isExist = await this.majorService.findMajorByUuid(majorUuid);
+      this.fileUploadService.deleteFile(isExist.data.avatar);
+      this.fileUploadService.deleteFile(isExist.data.image);
 
-        if (!success) {
-          console.error('Failed to delete image:', error);
-        }
-      }
-      return major;
+      const major = await this.majorService.removeMajorByUuid(majorUuid);
+
+      return res.status(HttpStatus.OK).json(major);
+    } catch (error) {
+      console.error('Error updating major:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to remove major!',
+        detail: error.message,
+      });
     }
   }
 }

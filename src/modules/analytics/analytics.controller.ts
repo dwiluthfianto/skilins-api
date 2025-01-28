@@ -1,12 +1,13 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 
 @ApiTags('Analytics')
-@Controller({ path: 'api/v1/analytics', version: '1' })
+@ApiBasicAuth('JWT-auth')
+@Controller({ path: 'analytics', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('Staff')
 export class AnalyticsController {

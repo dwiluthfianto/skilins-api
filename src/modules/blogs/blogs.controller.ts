@@ -13,10 +13,9 @@ import {
   UseInterceptors,
   UploadedFile,
   Req,
-  ParseFilePipeBuilder,
   Res,
 } from '@nestjs/common';
-import { BlogsService } from './blogs.service';
+import { BlogService } from './blogs.service';
 import { CreateBlogDto } from './dto/create-blog.dto';
 import { UpdateBlogDto } from './dto/update-blog.dto';
 import {
@@ -30,19 +29,18 @@ import { Blog } from './entities/blog.entity';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
-import { SupabaseService } from 'src/supabase';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ContentFileEnum } from '../contents/content-file.enum';
 import { Request, Response } from 'express';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Blogs')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/contents/blogs', version: '1' })
-export class BlogsController {
+@Controller({ path: 'contents/blogs', version: '1' })
+export class BlogController {
   constructor(
-    private readonly blogsService: BlogsService,
-    private readonly supabaseService: SupabaseService,
+    private readonly blogService: BlogService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -54,56 +52,27 @@ export class BlogsController {
   @UseInterceptors(FileInterceptor('thumbnail'))
   @ApiConsumes('multipart/form-data')
   async create(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 500 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     thumbnail: Express.Multer.File,
     @Req() req: Request,
     @Res() res: Response,
     @Body() createBlogDto: CreateBlogDto,
   ) {
-    let thumbnailFilename: string;
     const user = req.user;
     try {
-      if (thumbnail && thumbnail.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            thumbnail,
-            `skilins_storage/${ContentFileEnum.thumbnail}`,
-          );
-
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        thumbnailFilename = fileName;
-        createBlogDto.thumbnail = url;
-      }
-      const result = await this.blogsService.create(user['sub'], createBlogDto);
+      const file = this.fileUploadService.handleFileUpload(thumbnail);
+      createBlogDto.thumbnail = file.filePath;
+      const result = await this.blogService.createBlog(
+        user['sub'],
+        createBlogDto,
+      );
       return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during Blog creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.thumbnail}${thumbnailFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
-        message: 'Failed to create blog and cleaned up uploaded files.',
+        message: 'Failed to create blog.',
         detail: e.message,
       });
     }
@@ -116,7 +85,7 @@ export class BlogsController {
   })
   @HttpCode(HttpStatus.OK)
   findAll(@Query() query: FindBlogQueryDto) {
-    return this.blogsService.fetchBlogs(query);
+    return this.blogService.findAllBlog(query);
   }
 
   @Get(':slug')
@@ -124,8 +93,8 @@ export class BlogsController {
     type: Blog,
   })
   @HttpCode(HttpStatus.OK)
-  findOne(@Param('slug') slug: string) {
-    return this.blogsService.findOneBySlug(slug);
+  findBlog(@Param('slug') slug: string) {
+    return this.blogService.findBlogBySlug(slug);
   }
 
   @Patch(':contentUuid')
@@ -137,18 +106,7 @@ export class BlogsController {
   @UseInterceptors(FileInterceptor('thumbnail'))
   @ApiConsumes('multipart/form-data')
   async update(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 500 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     thumbnail: Express.Multer.File,
     @Req() req: Request,
     @Param('contentUuid') contentUuid: string,
@@ -158,19 +116,14 @@ export class BlogsController {
     const user = req.user;
 
     try {
-      const isExist = await this.blogsService.findOneByUuid(contentUuid);
-      if (thumbnail && thumbnail.size > 0) {
-        const avatarFilename = isExist.data.thumbnail.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.thumbnail}${avatarFilename}`,
-          thumbnail,
-        );
-        if (!success) {
-          throw new Error(`Failed to update thumbnail: ${error}`);
-        }
-      }
+      const isExist = await this.blogService.findBlogByUuid(contentUuid);
+      const file = this.fileUploadService.updateFile(
+        isExist.data.thumbnail,
+        thumbnail,
+      );
+      updateBlogDto.thumbnail = file.filePath;
 
-      const blog = await this.blogsService.update(
+      const blog = await this.blogService.updateBlogByUuid(
         user['sub'],
         contentUuid,
         updateBlogDto,
@@ -194,23 +147,24 @@ export class BlogsController {
     type: Blog,
   })
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('contentUuid') contentUuid: string) {
-    const isExist = await this.blogsService.findOneByUuid(contentUuid);
-    const thumbFilename = isExist?.data?.thumbnail
-      ? isExist.data.thumbnail.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    if (isExist) {
-      const blog = await this.blogsService.remove(contentUuid);
-      if (blog.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.thumbnail}${thumbFilename}`,
-        ]);
+  async remove(
+    @Param('contentUuid') contentUuid: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const isExist = await this.blogService.findBlogByUuid(contentUuid);
+      this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
-        if (!success) {
-          console.error('Failed to delete thumbnail:', error);
-        }
-      }
-      return blog;
+      const blog = await this.blogService.removeBlogByUuid(contentUuid);
+
+      return res.status(HttpStatus.OK).json(blog);
+    } catch (error) {
+      console.error('Error updating blog:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to remove blog!',
+        detail: error.message,
+      });
     }
   }
 }

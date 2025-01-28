@@ -11,140 +11,139 @@ import {
   HttpCode,
   HttpStatus,
   UploadedFile,
-  HttpException,
+  Query,
+  Res,
 } from '@nestjs/common';
-import { GenresService } from './genres.service';
+import { GenreService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { SupabaseService } from 'src/supabase';
+import {
+  ApiBasicAuth,
+  ApiConsumes,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Genre } from './entities/genre.entity';
-import { ContentFileEnum } from '../contents/content-file.enum';
+import { Response } from 'express';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Genre')
-@Controller({ path: 'api/v1/genres', version: '1' })
-export class GenresController {
+@ApiBasicAuth('JWT-auth')
+@Controller({ path: 'genres', version: '1' })
+export class GenreController {
   constructor(
-    private readonly genresService: GenresService,
-    private readonly supabaseService: SupabaseService,
+    private readonly genreService: GenreService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Genre })
-  @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
   async create(
-    @UploadedFile() avatar_url: Express.Multer.File,
+    @UploadedFile()
+    avatar: Express.Multer.File,
     @Body() createGenreDto: CreateGenreDto,
+    @Res() res: Response,
   ) {
-    let avatarFilename: string;
     try {
-      if (avatar_url && avatar_url.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            avatar_url,
-            `skilins_storage/${ContentFileEnum.avatar}`,
-          );
-
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        avatarFilename = fileName;
-        createGenreDto.avatar_url = url;
-      }
-      return await this.genresService.create(createGenreDto);
+      const file = this.fileUploadService.handleFileUpload(avatar);
+      createGenreDto.avatar = file.filePath;
+      const result = await this.genreService.createGenre(createGenreDto);
+      return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during genre creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.avatar}${avatarFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-      throw new HttpException(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          error: `Tag creation failed: ${e.message}. ${avatarFilename ? 'Failed to clean up uploaded file' : ''}`,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to create genre.',
+        detail: e.message,
+      });
     }
   }
 
   @Get()
   @ApiOkResponse({ type: Genre })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'search by name for categories',
+  })
   @HttpCode(HttpStatus.OK)
-  findAll() {
-    return this.genresService.findAll();
+  findAll(@Query('search') search: string) {
+    return this.genreService.findAll(search);
   }
 
   @Get(':name')
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
   findOne(@Param('name') name: string) {
-    return this.genresService.findOne(name);
+    return this.genreService.findGenreByName(name);
   }
 
-  @Patch(':uuid')
+  @Patch(':genreUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
   async update(
-    @Param('uuid') uuid: string,
-    @UploadedFile() avatar_url: Express.Multer.File,
+    @Param('genreUuid') genreUuid: string,
+    @UploadedFile() avatar: Express.Multer.File,
     @Body() updateGenreDto: UpdateGenreDto,
+    @Res() res: Response,
   ) {
-    const genre = await this.genresService.update(uuid, updateGenreDto);
-    if (genre.status === 'success') {
-      const isExist = await this.genresService.findOneByUuid(uuid);
-      if (avatar_url && avatar_url.size > 0) {
-        const avatarFilename = isExist.data.avatar_url.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.avatar}${avatarFilename}`,
-          avatar_url,
-        );
-        if (!success) {
-          throw new Error(`Failed to update avatar: ${error}`);
-        }
-      }
-    }
+    try {
+      const isExist = await this.genreService.findGenreByUuid(genreUuid);
+      const file = this.fileUploadService.updateFile(
+        isExist.data.avatar,
+        avatar,
+      );
+      updateGenreDto.avatar = file.filePath;
+      const genre = await this.genreService.updateGenreByUuid(
+        genreUuid,
+        updateGenreDto,
+      );
 
-    return genre;
+      return res.status(HttpStatus.OK).json(genre);
+    } catch (error) {
+      console.error('Error updating genre:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to update genre',
+        detail: error.message,
+      });
+    }
   }
 
-  @Delete(':uuid')
+  @Delete(':genreUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string) {
-    const isExist = await this.genresService.findOneByUuid(uuid);
-    const thumbFilename = isExist?.data?.avatar_url
-      ? isExist.data.avatar_url.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    if (isExist) {
-      const genre = await this.genresService.remove(uuid);
-      if (genre.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.avatar}${thumbFilename}`,
-        ]);
+  async remove(@Param('genreUuid') genreUuid: string, @Res() res: Response) {
+    try {
+      const isExist = await this.genreService.findGenreByUuid(genreUuid);
+      this.fileUploadService.deleteFile(isExist.data.avatar);
 
-        if (!success) {
-          console.error('Failed to delete avatar:', error);
-        }
-      }
-      return genre;
+      const result = await this.genreService.removeGenreByUuid(genreUuid);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      console.error('Error updating genre:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to remove genre!',
+        detail: error.message,
+      });
     }
   }
 }

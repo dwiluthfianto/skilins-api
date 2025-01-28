@@ -11,7 +11,7 @@ export class CreateCategoryDto {
     type: String,
     format: 'binary',
   })
-  avatar_url: string;
+  avatar: string;
 
   @ApiPropertyOptional({ example: 'This is a description', type: String })
   @IsString()

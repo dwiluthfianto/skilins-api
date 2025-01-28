@@ -16,14 +16,14 @@ export class SlugHelper {
     let counter = 1;
 
     // Cek apakah slug sudah ada di database
-    let existingContent = await this.prisma.contents.findUnique({
+    let existingContent = await this.prisma.content.findUnique({
       where: { slug },
     });
 
     // Jika sudah ada, tambahkan angka hingga slug menjadi unik
     while (existingContent) {
       slug = `${baseSlug}-${counter}`;
-      existingContent = await this.prisma.contents.findUnique({
+      existingContent = await this.prisma.content.findUnique({
         where: { slug },
       });
       counter++;
@@ -41,14 +41,14 @@ export class SlugHelper {
     let counter = 1;
 
     // Cek apakah slug sudah ada di database
-    let existingContent = await this.prisma.competitions.findUnique({
+    let existingContent = await this.prisma.competition.findUnique({
       where: { slug },
     });
 
     // Jika sudah ada, tambahkan angka hingga slug menjadi unik
     while (existingContent) {
       slug = `${baseSlug}-${counter}`;
-      existingContent = await this.prisma.competitions.findUnique({
+      existingContent = await this.prisma.competition.findUnique({
         where: { slug },
       });
       counter++;

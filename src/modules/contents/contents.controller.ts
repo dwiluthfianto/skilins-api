@@ -6,37 +6,36 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { ContentsService } from './contents.service';
+import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
+import { ContentService } from './contents.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { ContentStatus } from '@prisma/client';
 
 @ApiTags('Contents')
-@Controller({ path: 'api/v1/contents', version: '1' })
-export class ContentsController {
-  constructor(private readonly contentsService: ContentsService) {}
+@ApiBasicAuth('JWT-auth')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('Staff')
+@Controller({ path: 'contents', version: '1' })
+export class ContentController {
+  constructor(private readonly contentService: ContentService) {}
 
   @Patch(':contentUuid/approve')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
   @HttpCode(HttpStatus.OK)
   async approveContent(@Param('contentUuid') contentUuid: string) {
-    return this.contentsService.updateContentStatus(
+    return this.contentService.updateContentStatus(
       contentUuid,
-      ContentStatus.APPROVED,
+      ContentStatus.Approved,
     );
   }
 
   @Patch(':contentUuid/reject')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
   @HttpCode(HttpStatus.OK)
   async rejectContent(@Param('contentUuid') contentUuid: string) {
-    return this.contentsService.updateContentStatus(
+    return this.contentService.updateContentStatus(
       contentUuid,
-      ContentStatus.REJECTED,
+      ContentStatus.Rejected,
     );
   }
 }

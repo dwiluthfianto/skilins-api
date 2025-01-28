@@ -8,37 +8,38 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
-  ParseFilePipeBuilder,
   HttpStatus,
-  HttpException,
   HttpCode,
   Query,
   Delete,
+  Res,
 } from '@nestjs/common';
-import { CompetitionsService } from './competitions.service';
+import { CompetitionService } from './competitions.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { UpdateCompetitionDto } from './dto/update-competition.dto';
 import {
+  ApiBasicAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { SupabaseService } from 'src/supabase';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { Competition } from './entities/competition.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ContentFileEnum } from '../contents/content-file.enum';
-import { FindCompetitionQueryDto } from './dto/find-competition-query.dto';
+import { FindCompetitionDto } from './dto/find-competition.dto';
+import { FileUploadService } from '../file-upload/file-upload.service';
+import { Response } from 'express';
 
 @ApiTags('Competition')
-@Controller({ path: 'api/v1/competitions', version: '1' })
-export class CompetitionsController {
+@ApiBasicAuth('JWT-auth')
+@Controller({ path: 'competitions', version: '1' })
+export class CompetitionController {
   constructor(
-    private readonly competitionsService: CompetitionsService,
-    private readonly supabaseService: SupabaseService,
+    private readonly competitionsService: CompetitionService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -54,83 +55,31 @@ export class CompetitionsController {
   })
   @ApiResponse({ status: 403, description: 'Forbidden.' })
   async create(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 500 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     thumbnail: Express.Multer.File,
     @Body() createCompetitionDto: CreateCompetitionDto,
+    @Res() res: Response,
   ) {
-    let thumbnailFilename: string;
     try {
-      if (thumbnail && thumbnail.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            thumbnail,
-            `skilins_storage/${ContentFileEnum.thumbnail}`,
-          );
-
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        thumbnailFilename = fileName;
-        createCompetitionDto.thumbnail = url;
-      }
-      return await this.competitionsService.createCompetition(
-        createCompetitionDto,
-      );
+      const file = this.fileUploadService.handleFileUpload(thumbnail);
+      createCompetitionDto.thumbnail = file.filePath;
+      const result =
+        await this.competitionsService.createCompetition(createCompetitionDto);
+      return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
-      console.error('Error during Competition creation:', e.message);
+      console.error('Error during competition creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.thumbnail}${thumbnailFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-      throw new HttpException(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          error: `Competition creation failed: ${e.message}. ${thumbnailFilename ? 'Failed to clean up uploaded file' : ''}`,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to create competition.',
+        detail: e.message,
+      });
     }
   }
 
   @Get()
-  findAll(@Query() query: FindCompetitionQueryDto) {
-    const { page, limit, search, type } = query;
-    if (type) {
-      return this.competitionsService.getCompetitionByType(page, limit, type);
-    }
-    return this.competitionsService.getAllCompetitions(page, limit, search);
-  }
-
-  @Get('active')
-  findActiveCompetition(@Query() query: FindCompetitionQueryDto) {
-    const { page, limit, search } = query;
-    return this.competitionsService.getActiveCompetitions(page, limit, search);
-  }
-
-  @Get('finished')
-  findFinishedCompetition(@Query() query: FindCompetitionQueryDto) {
-    const { page, limit, search } = query;
-    return this.competitionsService.getFinishedCompetitions(
-      page,
-      limit,
-      search,
-    );
+  findAll(@Query() query: FindCompetitionDto) {
+    return this.competitionsService.findAllCompetition(query);
   }
 
   @Get('/detail/:slug')
@@ -156,43 +105,34 @@ export class CompetitionsController {
   @UseInterceptors(FileInterceptor('thumbnail'))
   @HttpCode(HttpStatus.OK)
   async update(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 500 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     thumbnail: Express.Multer.File,
     @Param('competitionUuid') competitionUuid: string,
     @Body() updateCompetitionDto: UpdateCompetitionDto,
+    @Res() res: Response,
   ) {
-    const competition = await this.competitionsService.updateCompetition(
-      competitionUuid,
-      updateCompetitionDto,
-    );
-
-    if (competition.status === 'success') {
+    try {
       const isExist =
-        await this.competitionsService.getCompetitionByUuid(competitionUuid);
-      if (thumbnail && thumbnail.size > 0) {
-        const thumbFilename = isExist.data.thumbnail.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.thumbnail}${thumbFilename}`,
-          thumbnail,
-        );
-        if (!success) {
-          throw new Error(`Failed to update thumbnail: ${error}`);
-        }
-      }
-    }
+        await this.competitionsService.findCompetitionByUuid(competitionUuid);
+      const file = this.fileUploadService.updateFile(
+        isExist.data.thumbnail,
+        thumbnail,
+      );
+      updateCompetitionDto.thumbnail = file.filePath;
+      const competition = await this.competitionsService.updateCompetition(
+        competitionUuid,
+        updateCompetitionDto,
+      );
 
-    return competition;
+      return res.status(HttpStatus.OK).json(competition);
+    } catch (error) {
+      console.error('Error updating category:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to update competition',
+        detail: error.message,
+      });
+    }
   }
 
   @Delete(':competitionUuid')
@@ -200,25 +140,26 @@ export class CompetitionsController {
   @Roles('Staff')
   @ApiOkResponse({ type: Competition })
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('competitionUuid') competitionUuid: string) {
-    const isExist =
-      await this.competitionsService.getCompetitionByUuid(competitionUuid);
-    const thumbFilename = isExist?.data?.thumbnail
-      ? isExist.data.thumbnail.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    if (isExist) {
-      const tag =
-        await this.competitionsService.removeCompetition(competitionUuid);
-      if (tag.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.thumbnail}${thumbFilename}`,
-        ]);
+  async remove(
+    @Param('competitionUuid') competitionUuid: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const isExist =
+        await this.competitionsService.getCompetitionByUuid(competitionUuid);
+      this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
-        if (!success) {
-          console.error('Failed to delete thumbnail:', error);
-        }
-      }
-      return tag;
+      const result =
+        await this.competitionsService.removeCompetition(competitionUuid);
+
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      console.error('Error deleting category:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to delete category',
+        detail: error.message,
+      });
     }
   }
 

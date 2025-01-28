@@ -3,11 +3,11 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateTagDto {
   @ApiPropertyOptional({
-    example: 'https://example.com/avatar.jpg',
     type: String,
+    format: 'binary',
   })
   @IsOptional()
-  avatar_url?: string;
+  avatar?: string;
 
   @ApiProperty({ example: 'this is a name', type: String })
   @IsNotEmpty()

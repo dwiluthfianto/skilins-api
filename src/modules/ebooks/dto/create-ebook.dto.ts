@@ -27,7 +27,7 @@ export class CreateEbookDto extends ContentDto {
   publication?: string;
 
   @ApiProperty({ type: String, format: 'binary' })
-  file_url: string;
+  file: string;
 
   @ApiPropertyOptional({ example: 'This is an ISBN', type: String })
   @IsString()

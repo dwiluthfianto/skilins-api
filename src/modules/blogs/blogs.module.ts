@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { BlogsService } from './blogs.service';
-import { BlogsController } from './blogs.controller';
+import { BlogService } from './blogs.service';
+import { BlogController } from './blogs.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SupabaseService } from 'src/supabase';
+
 import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
-  controllers: [BlogsController],
-  providers: [BlogsService, UuidHelper, SupabaseService, SlugHelper],
+  controllers: [BlogController],
+  providers: [BlogService, UuidHelper, SlugHelper, FileUploadService],
   imports: [PrismaModule],
 })
-export class BlogsModule {}
+export class BlogModule {}

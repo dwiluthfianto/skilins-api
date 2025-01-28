@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Comments, Ratings, Genres } from '@prisma/client';
+import { Comment, Rating, Genre } from '@prisma/client';
 import { Contents } from 'src/modules/contents/content.interface';
 
 export class Ebook implements Contents {
@@ -70,11 +70,11 @@ export class Ebook implements Contents {
   release_date: Date;
 
   @ApiProperty({ example: '[]', type: String })
-  genres: Genres[];
+  genres: Genre[];
 
   @ApiProperty({ example: '[]', type: String })
-  comments: Comments[];
+  comments: Comment[];
 
   @ApiProperty({ example: '[]', type: String })
-  ratings: Ratings[];
+  ratings: Rating[];
 }

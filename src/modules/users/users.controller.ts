@@ -11,45 +11,44 @@ import {
   HttpCode,
   HttpStatus,
   UploadedFile,
-  HttpException,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { UserService } from './users.service';
 import { RoleUserDto } from './dto/role-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ContentFileEnum } from '../contents/content-file.enum';
-import { SupabaseService } from 'src/supabase';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('User')
-@Controller({ path: 'api/v1/users', version: '1' })
+@ApiBasicAuth('JWT-auth')
+@Controller({ path: 'users', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-export class UsersController {
+export class UserController {
   constructor(
-    private readonly usersService: UsersService,
-    private readonly supabaseService: SupabaseService,
+    private readonly userService: UserService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Get(':uuid')
   @Roles('Admin', 'User', 'Staff', 'Judge', 'Student')
   async getUserByUuid(@Param('uuid') uuid: string) {
-    return this.usersService.findOne(uuid);
+    return this.userService.findOne(uuid);
   }
 
   @Post('assign-role')
   @Roles('Admin')
   async assignRole(@Body() roleUserDto: RoleUserDto) {
-    return this.usersService.assignRoleToUser(roleUserDto);
+    return this.userService.assignRoleToUser(roleUserDto);
   }
 
   @Post('remove-account')
-  @Roles('Admin', 'User', 'Student', 'Staff')
+  @Roles('Admin', 'User', 'Student')
   async removeUser(@Req() req: Request, @Res() res: Response) {
     const user = req.user;
-    await this.usersService.removeUser(user['sub']);
+    await this.userService.removeUser(user['sub']);
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: false,
@@ -60,72 +59,35 @@ export class UsersController {
 
   @Post('update-profile/:uuid')
   @Roles('Admin', 'User', 'Student', 'Staff')
-  @UseInterceptors(FileInterceptor('profile_url'))
+  @UseInterceptors(FileInterceptor('profile'))
   @HttpCode(HttpStatus.OK)
   async updateProfile(
     @Param('uuid') uuid: string,
-    @UploadedFile() profile_url: Express.Multer.File,
+    @UploadedFile() profile: Express.Multer.File,
+    @Res() res: Response,
   ) {
-    let profileFilename: string;
-    let profileUrl: string;
-    const user = await this.usersService.findOne(uuid);
+    const user = await this.userService.findOne(uuid);
     try {
-      if (profile_url && profile_url.size > 0) {
-        if (user.data.profile === null) {
-          const { success, url, fileName, error } =
-            await this.supabaseService.uploadFile(
-              profile_url,
-              `skilins_storage/${ContentFileEnum.profile}`,
-            );
-
-          if (!success) {
-            throw new Error(`Failed to upload image: ${error}`);
-          }
-
-          profileFilename = fileName;
-          profileUrl = url;
-          return await this.usersService.updateProfile(uuid, profileUrl);
-        }
-
-        if (user.data.profile !== null) {
-          profileFilename = user.data.profile.split('/').pop();
-          const { success, error } = await this.supabaseService.updateFile(
-            `${ContentFileEnum.profile}${profileFilename}`,
-            profile_url,
-          );
-          if (!success) {
-            throw new Error(`Failed to update image: ${error}`);
-          }
-
-          return {
-            status: 'success',
-            message: 'Image changed successfully!',
-          };
-        }
-      }
-    } catch (e) {
-      console.error('Error during tag creation:', e.message);
-
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.avatar}${profileFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-      throw new HttpException(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          error: `Update profile failed: ${e.message}. ${profileFilename ? 'Failed to clean up uploaded file' : ''}`,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      const file = this.fileUploadService.updateFile(
+        user.data.profile,
+        profile,
       );
+
+      const result = await this.userService.updateProfile(uuid, file.filePath);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (e) {
+      console.error('Error during profile update:', e.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to update profile.',
+        detail: e.message,
+      });
     }
   }
 
   @Get()
   @Roles('Admin')
   async getAllUsers() {
-    return this.usersService.findAll();
+    return this.userService.findAll();
   }
 }

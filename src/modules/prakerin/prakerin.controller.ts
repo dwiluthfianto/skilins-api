@@ -30,18 +30,17 @@ import {
 } from '@nestjs/swagger';
 import { Prakerin } from './entities/prakerin.entity';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { ContentFileEnum } from '../contents/content-file.enum';
-import { SupabaseService } from 'src/supabase';
 import { Request, Response } from 'express';
 import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Prakerin')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/contents/prakerin', version: '1' })
+@Controller({ path: 'contents/prakerin', version: '1' })
 export class PrakerinController {
   constructor(
     private readonly prakerinService: PrakerinService,
-    private readonly supabaseService: SupabaseService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -51,76 +50,40 @@ export class PrakerinController {
     type: Prakerin,
   })
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file_url' }]),
+    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
   )
   @ApiConsumes('multipart/form-data')
   async create(
     @UploadedFiles()
     files: {
-      thumbnail?: Express.Multer.File[];
-      file_url?: Express.Multer.File[];
+      thumbnail: Express.Multer.File;
+      file: Express.Multer.File;
     },
     @Body() createPrakerinDto: CreatePrakerinDto,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    let thumbFilename: string;
-    let fileFilename: string;
+    const user = req.user;
     try {
-      if (files.thumbnail && files.thumbnail.length > 0) {
-        const {
-          success: thumbnailSuccess,
-          url: thumbnailUrl,
-          fileName: thumbnailFilename,
-          error: thumbnailError,
-        } = await this.supabaseService.uploadFile(
-          files.thumbnail[0],
-          `skilins_storage/${ContentFileEnum.thumbnail}`,
-        );
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail,
+      );
+      createPrakerinDto.thumbnail = thumbnail.filePath;
 
-        if (!thumbnailSuccess) {
-          throw new Error(`Failed to upload thumbnail: ${thumbnailError}`);
-        }
+      const file_prakerin = this.fileUploadService.handleFileUpload(files.file);
+      createPrakerinDto.file = file_prakerin.filePath;
 
-        thumbFilename = thumbnailFilename;
-
-        createPrakerinDto.thumbnail = thumbnailUrl;
-      }
-
-      if (files.file_url && files.file_url.length > 0) {
-        const {
-          success: fileSuccess,
-          url: fileUrl,
-          fileName: fileUrlFilename,
-          error: fileError,
-        } = await this.supabaseService.uploadFile(
-          files.file_url[0],
-          `skilins_storage/${ContentFileEnum.file_report}`,
-        );
-
-        if (!fileSuccess) {
-          throw new Error(`Failed to upload file: ${fileError}`);
-        }
-        fileFilename = fileUrlFilename;
-        createPrakerinDto.file_url = fileUrl;
-      }
-
-      const result = await this.prakerinService.create(createPrakerinDto);
+      const result = await this.prakerinService.createPrakerin(
+        user['sub'],
+        createPrakerinDto,
+      );
       return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during report podcast creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.file_report}${fileFilename}`,
-        `${ContentFileEnum.thumbnail}${thumbFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
-        message: 'Failed to create prakerin and cleaned up uploaded files.',
+        message: 'Failed to create prakerin.',
         detail: e.message,
       });
     }
@@ -133,7 +96,7 @@ export class PrakerinController {
   })
   @HttpCode(HttpStatus.OK)
   findAll(@Query() query: FindPrakerinQueryDto) {
-    return this.prakerinService.fetchPrakerin(query);
+    return this.prakerinService.findAllPrakerin(query);
   }
 
   @Get('student')
@@ -158,14 +121,14 @@ export class PrakerinController {
   })
   @HttpCode(HttpStatus.OK)
   findOne(@Param('slug') slug: string) {
-    return this.prakerinService.findOneBySlug(slug);
+    return this.prakerinService.findPrakerinBySlug(slug);
   }
 
   @Patch(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Student')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file_url' }]),
+    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
   )
   @ApiOkResponse({
     type: Prakerin,
@@ -175,51 +138,32 @@ export class PrakerinController {
     @Param('uuid') uuid: string,
     @UploadedFiles()
     files: {
-      thumbnail?: Express.Multer.File[];
-      file_url?: Express.Multer.File[];
+      thumbnail: Express.Multer.File;
+      file: Express.Multer.File;
     },
     @Body() updatePrakerinDto: UpdatePrakerinDto,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
+    const user = req.user;
     try {
-      const isExist = await this.prakerinService.findOne(uuid);
+      const isExist = await this.prakerinService.findPrakerinByUuid(uuid);
 
-      if (!isExist) {
-        return res.status(HttpStatus.NOT_FOUND).json({
-          status: 'failed',
-          message: 'Prakerin not found',
-        });
-      }
+      const thumbnail = this.fileUploadService.updateFile(
+        isExist.data.thumbnail,
+        files.thumbnail,
+      );
+      updatePrakerinDto.thumbnail = thumbnail.filePath;
 
-      if (files.thumbnail && files.thumbnail.length > 0) {
-        const thumbFilename = isExist.data.thumbnail.split('/').pop();
+      const file_prakerin = this.fileUploadService.updateFile(
+        isExist.data.prakerin.file_attachment.file,
+        files.file,
+      );
+      updatePrakerinDto.file = file_prakerin.filePath;
 
-        const { success: thumbnailSuccess, error: thumbnailError } =
-          await this.supabaseService.updateFile(
-            `${ContentFileEnum.thumbnail}${thumbFilename}`,
-            files.thumbnail[0],
-          );
-
-        if (!thumbnailSuccess) {
-          throw new Error(`Failed to update thumbnail: ${thumbnailError}`);
-        }
-      }
-
-      if (files.file_url && files.file_url.length > 0) {
-        const fileFilename = isExist.data.file_url.split('/').pop();
-        const { success: fileSuccess, error: fileError } =
-          await this.supabaseService.updateFile(
-            `${ContentFileEnum.file_report}${fileFilename}`,
-            files.file_url[0],
-          );
-
-        if (!fileSuccess) {
-          throw new Error(`Failed to update file: ${fileError}`);
-        }
-      }
-
-      const updatedPrakerin = await this.prakerinService.update(
+      const updatedPrakerin = await this.prakerinService.updatePrakerinByUuid(
         uuid,
+        user['sub'],
         updatePrakerinDto,
       );
 
@@ -234,36 +178,36 @@ export class PrakerinController {
     }
   }
 
-  @Delete(':uuid')
+  @Delete(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
   @ApiOkResponse({
     type: Prakerin,
   })
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string) {
-    const isExist = await this.prakerinService.findOne(uuid);
-    const thumbFilename = isExist.data.thumbnail
-      .split('/')
-      .pop()
-      .replace(/%20/g, ' ');
-    const fileFilename = isExist.data.file_url
-      .split('/')
-      .pop()
-      .replace(/%20/g, ' ');
-    if (isExist) {
-      const report = await this.prakerinService.remove(uuid);
-      if (report.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.thumbnail}${thumbFilename}`,
-          `${ContentFileEnum.file_report}${fileFilename}`,
-        ]);
+  async remove(
+    @Param('contentUuid') contentUuid: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const isExist =
+        await this.prakerinService.findPrakerinByUuid(contentUuid);
+      this.fileUploadService.deleteFile(isExist.data.thumbnail);
+      this.fileUploadService.deleteFile(
+        isExist.data.prakerin.file_attachment.file,
+      );
 
-        if (!success) {
-          console.error('Failed to delete file:', error);
-        }
-      }
-      return report;
+      const prakerin =
+        await this.prakerinService.removePrakerinByUuid(contentUuid);
+
+      return res.status(HttpStatus.OK).json(prakerin);
+    } catch (error) {
+      console.error('Error updating prakerin:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to remove prakerin!',
+        detail: error.message,
+      });
     }
   }
 }

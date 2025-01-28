@@ -8,26 +8,29 @@ datasource db {
   // directUrl = env("DIRECT_URL")
 }
 
-model Users {
-  id                 Int        @id @default(autoincrement())
-  uuid               String     @unique @default(uuid())
-  email              String     @unique
-  full_name          String
-  profile_url        String?
-  password           String
-  emailVerified      Boolean    @default(false)
-  resetPasswordToken String?
-  resetTokenExpires  DateTime?
-  refreshToken       String?    @unique
-  created_at         DateTime   @default(now())
-  updated_at         DateTime   @updatedAt
-  roles_id           Int
-  roles              Roles      @relation(fields: [roles_id], references: [id], onDelete: Restrict)
-  Ratings            Ratings[]
-  Comments           Comments[]
-  Blogs              Blogs[]
-  Judges             Judges[]
-  Students           Students[]
+model User {
+  id                   Int       @id @default(autoincrement())
+  uuid                 String    @unique @default(uuid())
+  email                String    @unique
+  full_name            String
+  profile              String?
+  password             String
+  email_verified       Boolean   @default(false)
+  reset_password_token String?
+  reset_token_expires  DateTime?
+  refresh_token        String?   @unique
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  roles_id             Int
+  role                 Role      @relation(fields: [roles_id], references: [id], onDelete: Restrict)
+  rating               Rating[]
+  comment              Comment[]
+  blog                 Blog[]
+  judge                Judge?
+  student              Student?
+
+  @@index([uuid])
+  @@map("user")
 }
 
 enum RoleType {
@@ -38,233 +41,304 @@ enum RoleType {
   Judge
 }
 
-model Roles {
-  id    Int      @id @default(autoincrement())
-  uuid  String   @unique @default(uuid())
-  name  RoleType @unique @default(User)
-  users Users[]
+model Role {
+  id   Int      @id @default(autoincrement())
+  uuid String   @unique @default(uuid())
+  name RoleType @unique @default(User)
+  user User[]
+
+  @@index([uuid])
+  @@map("role")
 }
 
-model Ratings {
-  id           Int       @id @default(autoincrement())
-  uuid         String    @unique @default(uuid())
+model Rating {
+  id           Int      @id @default(autoincrement())
+  uuid         String   @unique @default(uuid())
   content_id   Int
-  content      Contents  @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  content      Content  @relation(fields: [content_id], references: [id], onDelete: Cascade)
   rating_by    Int
-  user         Users     @relation(fields: [rating_by], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [rating_by], references: [id], onDelete: Cascade)
   rating_value Int
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  Episodes     Episodes? @relation(fields: [episode_id], references: [id])
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  episode      Episode? @relation(fields: [episode_id], references: [id])
   episode_id   Int?
 
-  @@unique(name: "ratingContent", [content_id, rating_by])
-  @@unique(name: "ratingEpisode", [episode_id, rating_by])
+  @@unique(name: "rating_content", [content_id, rating_by])
+  @@unique(name: "rating_episode", [episode_id, rating_by])
+  @@index([uuid])
+  @@map("rating")
 }
 
-model Comments {
-  id              Int       @id @default(autoincrement())
-  uuid            String    @unique @default(uuid())
+model Comment {
+  id              Int      @id @default(autoincrement())
+  uuid            String   @unique @default(uuid())
   content_id      Int
-  content         Contents  @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  content         Content  @relation(fields: [content_id], references: [id], onDelete: Cascade)
   comment_content String
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
   commented_by    Int
-  user            Users     @relation(fields: [commented_by], references: [id], onDelete: Cascade)
-  Episodes        Episodes? @relation(fields: [episodesId], references: [id])
-  episodesId      Int?
+  user            User     @relation(fields: [commented_by], references: [id], onDelete: Cascade)
+  episode         Episode? @relation(fields: [episodes_id], references: [id])
+  episodes_id     Int?
+
+  @@index([uuid])
+  @@map("comment")
 }
 
 enum ContentType {
-  EBOOK
-  VIDEO
-  AUDIO
-  STORY
-  PRAKERIN
-  BLOG
+  Ebook
+  Video
+  Audio
+  Story
+  Prakerin
+  Blog
 }
 
 enum ContentStatus {
-  PENDING
-  APPROVED
-  REJECTED
+  Pending
+  Approved
+  Rejected
 }
 
-model Contents {
-  id            Int             @id @default(autoincrement())
-  uuid          String          @unique @default(uuid())
+model Content {
+  id            Int           @id @default(autoincrement())
+  uuid          String        @unique @default(uuid())
   type          ContentType
   title         String
   thumbnail     String
   description   String?
-  slug          String          @unique
-  status        ContentStatus   @default(PENDING)
-  created_at    DateTime        @default(now())
-  updated_at    DateTime        @updatedAt
+  slug          String        @unique
+  status        ContentStatus @default(Pending)
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
   category_id   Int
-  category      Categories      @relation(fields: [category_id], references: [id], onDelete: Restrict)
-  Genres        Genres[]
-  Comments      Comments[]
-  Ratings       Ratings[]
-  VideoPodcasts VideoPodcasts[]
-  AudioPodcasts AudioPodcasts[]
-  Blogs         Blogs[]
-  Ebooks        Ebooks[]
-  Stories       Stories[]
-  Prakerin      Prakerin[]
-  Submissions   Submissions[]
-  Tags          Tags[]
+  category      Category      @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  genre         Genre[]
+  comment       Comment[]
+  rating        Rating[]
+  video_podcast VideoPodcast?
+  audio_podcast AudioPodcast?
+  blog          Blog?
+  ebook         Ebook?
+  story         Story?
+  prakerin      Prakerin?
+  submission    Submission?
+  tag           Tag[]
+
+  @@index([uuid])
+  @@map("content")
 }
 
-model Categories {
-  id          Int        @id @default(autoincrement())
-  uuid        String     @unique @default(uuid())
-  avatar_url  String?
-  name        String     @unique
+model FileAttachment {
+  id            Int            @id @default(autoincrement())
+  uuid          String         @unique @default(uuid())
+  file          String
+  type          ContentType
+  size          Int?
+  mimeType      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  audio_podcast AudioPodcast[]
+  ebook         Ebook[]
+  prakerin      Prakerin[]
+
+  @@index([uuid])
+  @@map("file_attachment")
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  avatar      String?
+  name        String    @unique
   description String?
-  Content     Contents[]
+  content     Content[]
+
+  @@index([uuid])
+  @@map("category")
 }
 
-model Tags {
-  id          Int        @id @default(autoincrement())
-  uuid        String     @unique @default(uuid())
-  avatar_url  String?
-  name        String     @unique
+model Tag {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  avatar      String?
+  name        String    @unique
   description String?
-  content     Contents[]
+  content     Content[]
+
+  @@index([uuid])
+  @@map("tag")
 }
 
-model Genres {
-  id          Int        @id @default(autoincrement())
-  uuid        String     @unique @default(uuid())
-  avatar_url  String?
-  name        String     @unique
+model Genre {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  avatar      String?
+  name        String    @unique
   description String?
-  content     Contents[]
+  content     Content[]
+
+  @@index([uuid])
+  @@map("genre")
 }
 
-model VideoPodcasts {
-  id         Int      @id @default(autoincrement())
-  uuid       String   @unique @default(uuid())
-  file_url   String
+model VideoPodcast {
+  id         Int     @id @default(autoincrement())
+  uuid       String  @unique @default(uuid())
+  link       String
   creator_id Int
-  creator    Students @relation(fields: [creator_id], references: [id], onDelete: Cascade)
-  content_id Int      @unique
-  content    Contents @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  creator    Student @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  content_id Int     @unique
+  content    Content @relation(fields: [content_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("video_podcast")
 }
 
-model AudioPodcasts {
-  id         Int      @id @default(autoincrement())
-  uuid       String   @unique @default(uuid())
-  duration   Float
-  file_url   String
+model AudioPodcast {
+  id              Int            @id @default(autoincrement())
+  uuid            String         @unique @default(uuid())
+  duration        Float
+  file_id         Int
+  creator_id      Int
+  creator         Student        @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  content_id      Int            @unique
+  content         Content        @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  file_attachment FileAttachment @relation(fields: [file_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("audio_podcast")
+}
+
+model Blog {
+  id         Int     @id @default(autoincrement())
+  uuid       String  @unique @default(uuid())
   creator_id Int
-  creator    Students @relation(fields: [creator_id], references: [id], onDelete: Cascade)
-  content_id Int      @unique
-  content    Contents @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  creator    User    @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  content_id Int     @unique
+  content    Content @relation(fields: [content_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("blog")
 }
 
-model Blogs {
-  id         Int      @id @default(autoincrement())
-  uuid       String   @unique @default(uuid())
-  author_id  Int
-  author     Users    @relation(fields: [author_id], references: [id], onDelete: Cascade)
-  content_id Int      @unique
-  content    Contents @relation(fields: [content_id], references: [id], onDelete: Cascade)
+model Ebook {
+  id              Int            @id @default(autoincrement())
+  uuid            String         @unique @default(uuid())
+  author          String
+  pages           Int
+  publication     String
+  file_id         Int
+  isbn            String
+  release_date    DateTime
+  content_id      Int            @unique
+  content         Content        @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  file_attachment FileAttachment @relation(fields: [file_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("ebook")
 }
 
-model Ebooks {
-  id           Int      @id @default(autoincrement())
-  uuid         String   @unique @default(uuid())
-  author       String
-  pages        Int
-  publication  String
-  file_url     String
-  isbn         String
-  release_date DateTime
-  content_id   Int      @unique
-  content      Contents @relation(fields: [content_id], references: [id], onDelete: Cascade)
+model Story {
+  id         Int       @id @default(autoincrement())
+  uuid       String    @unique @default(uuid())
+  creator_id Int
+  creator    Student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  episode    Episode[]
+  content_id Int       @unique
+  content    Content   @relation(fields: [content_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("story")
 }
 
-model Stories {
-  id         Int        @id @default(autoincrement())
-  uuid       String     @unique @default(uuid())
-  author_id  Int
-  author     Students   @relation(fields: [author_id], references: [id], onDelete: Cascade)
-  episodes   Episodes[]
-  content_id Int        @unique
-  content    Contents   @relation(fields: [content_id], references: [id], onDelete: Cascade)
-}
-
-model Episodes {
-  id         Int        @id @default(autoincrement())
-  uuid       String     @unique @default(uuid())
+model Episode {
+  id         Int       @id @default(autoincrement())
+  uuid       String    @unique @default(uuid())
   title      String
   content    String
-  order      Int        @unique
+  order      Int       @unique
   story_id   Int
-  story      Stories    @relation(fields: [story_id], references: [id], onDelete: Cascade)
-  created_at DateTime   @default(now())
-  updated_at DateTime   @updatedAt
-  Comments   Comments[]
-  Ratings    Ratings[]
+  story      Story     @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  comment    Comment[]
+  rating     Rating[]
+
+  @@index([uuid])
+  @@map("episode")
 }
 
 model Prakerin {
   id           Int       @id @default(autoincrement())
   uuid         String    @unique @default(uuid())
-  author_id    Int
-  author       Students  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  creator_id   Int
+  creator      Student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
   pages        Int
-  file_url     String
+  file_id      Int
   published_at DateTime?
   content_id   Int       @unique
-  content      Contents  @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  content      Content   @relation(fields: [content_id], references: [id], onDelete: Cascade)
+
+  file_attachment FileAttachment @relation(fields: [file_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("prakerin")
 }
 
-model Submissions {
+model Submission {
+  id             Int         @id @default(autoincrement())
+  uuid           String      @unique @default(uuid())
+  student_id     Int
+  student        Student     @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  content_id     Int         @unique
+  content        Content     @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  competition_id Int
+  competition    Competition @relation(fields: [competition_id], references: [id], onDelete: Cascade)
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+  judge          Judge[]
+  winner         Winner[]
+  score          Score[]
+
+  @@index([uuid])
+  @@map("submission")
+}
+
+model Judge {
   id             Int          @id @default(autoincrement())
   uuid           String       @unique @default(uuid())
-  student_id     Int
-  student        Students     @relation(fields: [student_id], references: [id], onDelete: Cascade)
-  content_id     Int
-  content        Contents     @relation(fields: [content_id], references: [id], onDelete: Cascade)
-  competition_id Int
-  competition    Competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade)
-  created_at     DateTime     @default(now())
-  updated_at     DateTime     @updatedAt
-  judges         Judges[]
-  Winners        Winners[]
-  Score          Score[]
-}
-
-model Judges {
-  id             Int           @id @default(autoincrement())
-  uuid           String        @unique @default(uuid())
-  user_id        Int
-  user           Users         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id        Int          @unique
+  user           User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   role           String?
   linkedin       String?
   instagram      String?
   competition_id Int?
-  competition    Competitions? @relation(fields: [competition_id], references: [id])
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @updatedAt
+  competition    Competition? @relation(fields: [competition_id], references: [id])
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
   score          Score[]
-  Submissions    Submissions?  @relation(fields: [submissions_id], references: [id])
+  submission     Submission?  @relation(fields: [submissions_id], references: [id])
   submissions_id Int?
+
+  @@index([uuid])
+  @@map("judge")
 }
 
 model EvaluationParameter {
-  id             Int          @id @default(autoincrement())
-  uuid           String       @unique @default(uuid())
+  id             Int         @id @default(autoincrement())
+  uuid           String      @unique @default(uuid())
   competition_id Int
   parameterName  String
-  weight         Float        @default(1)
-  created_at     DateTime     @default(now())
-  competition    Competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade)
+  weight         Float       @default(1)
+  created_at     DateTime    @default(now())
+  competition    Competition @relation(fields: [competition_id], references: [id], onDelete: Cascade)
   scores         Score[]
+
+  @@index([uuid])
+  @@map("evaluation_parameter")
 }
 
 model Score {
@@ -276,38 +350,47 @@ model Score {
   score         Int
   notes         String? // Catatan opsional dari juri
   created_at    DateTime            @default(now())
-  judge         Judges              @relation(fields: [judge_id], references: [id])
-  submission    Submissions         @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  judge         Judge               @relation(fields: [judge_id], references: [id])
+  submission    Submission          @relation(fields: [submission_id], references: [id], onDelete: Cascade)
   parameter     EvaluationParameter @relation(fields: [parameter_id], references: [id], onDelete: Cascade)
+
+  @@index([uuid])
+  @@map("score")
 }
 
-model Competitions {
-  id                  Int                   @id @default(autoincrement())
-  uuid                String                @unique @default(uuid())
-  thumbnail           String
-  title               String
-  slug                String                @unique
-  type                ContentType
-  description         String
-  guide               String
-  winner_count        Int
-  start_date          DateTime
-  end_date            DateTime
-  submission_deadline DateTime
-  Submissions         Submissions[]
-  Winners             Winners[]
-  Judges              Judges[]
-  EvaluationParameter EvaluationParameter[]
+model Competition {
+  id                   Int                   @id @default(autoincrement())
+  uuid                 String                @unique @default(uuid())
+  thumbnail            String
+  title                String
+  slug                 String                @unique
+  type                 ContentType
+  description          String
+  guide                String
+  winner_count         Int
+  start_date           DateTime
+  end_date             DateTime
+  submission_deadline  DateTime
+  submission           Submission[]
+  winner               Winner[]
+  judge                Judge[]
+  evaluation_parameter EvaluationParameter[]
+
+  @@index([uuid])
+  @@map("competition")
 }
 
-model Winners {
-  id             Int          @id @default(autoincrement())
-  uuid           String       @unique @default(uuid())
+model Winner {
+  id             Int         @id @default(autoincrement())
+  uuid           String      @unique @default(uuid())
   competition_id Int
-  competition    Competitions @relation(fields: [competition_id], references: [id], onDelete: Cascade)
+  competition    Competition @relation(fields: [competition_id], references: [id], onDelete: Cascade)
   submission_id  Int
-  submission     Submissions  @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  submission     Submission  @relation(fields: [submission_id], references: [id], onDelete: Cascade)
   rank           Int
+
+  @@index([uuid])
+  @@map("winner")
 }
 
 enum SexType {
@@ -315,34 +398,39 @@ enum SexType {
   Female
 }
 
-model Students {
+model Student {
   id         Int       @id @default(autoincrement())
   uuid       String    @unique @default(uuid())
   nis        String    @unique
   name       String
   major_id   Int
-  major      Majors    @relation(fields: [major_id], references: [id], onDelete: Restrict)
+  major      Major     @relation(fields: [major_id], references: [id], onDelete: Restrict)
   birthplace String?
   birthdate  DateTime?
   sex        SexType
   status     Boolean   @default(false)
-  user_id    Int
-  user       Users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id    Int       @unique
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  VideoPodcasts VideoPodcasts[]
-  AudioPodcasts AudioPodcasts[]
-  Stories       Stories[]
-  Prakerin      Prakerin[]
+  video_podcast VideoPodcast[]
+  audio_podcast AudioPodcast[]
+  story         Story[]
+  prakerin      Prakerin[]
+  submission    Submission[]
 
-  Submissions Submissions[]
+  @@index([uuid])
+  @@map("student")
 }
 
-model Majors {
-  id          Int        @id @default(autoincrement())
-  uuid        String     @unique @default(uuid())
-  name        String     @unique
-  image_url   String?
+model Major {
+  id          Int       @id @default(autoincrement())
+  uuid        String    @unique @default(uuid())
+  name        String    @unique
+  image       String?
   description String?
-  avatar_url  String?
-  students    Students[]
+  avatar      String?
+  student     Student[]
+
+  @@index([uuid])
+  @@map("major")
 }

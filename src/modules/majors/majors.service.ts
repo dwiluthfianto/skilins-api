@@ -2,47 +2,49 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateMajorDto } from './dto/create-major.dto';
 import { UpdateMajorDto } from './dto/update-major.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
-export class MajorsService {
-  constructor(private prisma: PrismaService) {}
+export class MajorService {
+  constructor(private prismaService: PrismaService) {}
 
   async create(createMajorDto: CreateMajorDto) {
-    const { name, avatar_url, description, image_url } = createMajorDto;
+    const { name, avatar, description, image } = createMajorDto;
 
-    const res = await this.prisma.$transaction(async (p) => {
-      const major = await p.majors.create({
-        data: { name, avatar_url, description, image_url },
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await prisma.major.create({
+        data: { name, avatar, description, image },
       });
 
       return {
         status: 'success',
         message: 'Majors succesfully added!',
-        data: { uuid: major.uuid },
       };
     });
 
     return res;
   }
 
-  async findAll(name: string) {
-    const majors = await this.prisma.majors.findMany({
-      where: { name: { contains: name, mode: 'insensitive' } },
+  async findAllMajor(name: string) {
+    const filterName = {
+      name: {
+        contains: name,
+        mode: Prisma.QueryMode.insensitive,
+      },
+    };
+
+    const major = await this.prismaService.major.findMany({
+      where: { ...filterName },
     });
     return {
       status: 'success',
-      data: majors.map((major) => ({
-        uuid: major.uuid,
-        avatar_url: major.avatar_url,
-        name: major.name,
-        description: major.description,
-      })),
+      data: major,
     };
   }
 
-  async findOne(uuid: string) {
-    const major = await this.prisma.majors.findUnique({
-      where: { uuid },
+  async findMajorByUuid(majorUuid: string) {
+    const major = await this.prismaService.major.findUnique({
+      where: { uuid: majorUuid },
     });
 
     if (!major) {
@@ -50,55 +52,55 @@ export class MajorsService {
     }
     return {
       status: 'success',
-      data: {
-        image_url: major.image_url,
-        avatar_url: major.avatar_url,
-        name: major.name,
-        description: major.description,
-      },
+      data: major,
     };
   }
 
-  async update(uuid: string, updateMajorDto: UpdateMajorDto) {
-    const { name, avatar_url, description, image_url } = updateMajorDto;
+  async updateMajorByUuid(majorUuid: string, updateMajorDto: UpdateMajorDto) {
+    const { name, avatar, description, image } = updateMajorDto;
 
-    const res = await this.prisma.$transaction(async (p) => {
-      const major = await p.majors.findUniqueOrThrow({ where: { uuid } });
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const major = await prisma.major.findUniqueOrThrow({
+        where: { uuid: majorUuid },
+      });
 
       if (!major) {
         throw new NotFoundException('Major is not found!');
       }
 
-      const res = await p.majors.update({
-        where: { uuid: uuid },
+      await prisma.major.update({
+        where: { uuid: majorUuid },
         data: {
           name,
-          avatar_url,
+          avatar,
           description,
-          image_url,
+          image,
         },
       });
 
       return {
         status: 'success',
-        message: 'Majors succesfully updated!',
-        data: { uuid: res.uuid },
+        message: 'Major succesfully updated!',
       };
     });
 
     return res;
   }
 
-  async remove(uuid: string) {
-    await this.prisma.majors.findUniqueOrThrow({ where: { uuid } });
+  async removeMajorByUuid(majorUuid: string) {
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await prisma.major.findUniqueOrThrow({
+        where: { uuid: majorUuid },
+      });
 
-    const major = await this.prisma.majors.delete({ where: { uuid } });
-    return {
-      status: 'success',
-      message: 'major successfully deleted!',
-      data: {
-        uuid: major.uuid,
-      },
-    };
+      await prisma.major.delete({
+        where: { uuid: majorUuid },
+      });
+      return {
+        status: 'success',
+        message: 'Major successfully deleted!',
+      };
+    });
+    return res;
   }
 }

@@ -8,12 +8,5 @@ export class CreateVideoPodcastDto extends ContentDto {
     type: String,
   })
   @IsNotEmpty()
-  file_url: string;
-
-  @ApiProperty({
-    example: '36e401d8-a949-404a-bd55-d9115bbc319a',
-    type: String,
-  })
-  @IsNotEmpty()
-  creator_uuid: string;
+  link: string;
 }

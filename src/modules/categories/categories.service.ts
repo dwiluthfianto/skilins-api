@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -6,35 +6,36 @@ import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
-export class CategoriesService {
+export class CategoryService {
   constructor(
-    private prisma: PrismaService,
+    private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
   ) {}
 
-  async create(createCategoryDto: CreateCategoryDto) {
-    const { name, avatar_url, description } = createCategoryDto;
+  async createCategory(createCategoryDto: CreateCategoryDto) {
+    const { name, avatar, description } = createCategoryDto;
 
-    const category = await this.prisma.categories.create({
-      data: {
-        name,
-        avatar_url:
-          avatar_url ||
-          'https://images.unsplash.com/photo-1494537176433-7a3c4ef2046f?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-        description: description || 'No description available.',
-      },
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await prisma.category.create({
+        data: {
+          name,
+          avatar:
+            avatar ||
+            'https://images.unsplash.com/photo-1494537176433-7a3c4ef2046f?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+          description: description || 'No description available.',
+        },
+      });
+
+      return {
+        status: 'success',
+        message: 'Category successfully added!',
+      };
     });
 
-    return {
-      status: 'success',
-      message: 'category successfully added!',
-      data: {
-        uuid: category.uuid,
-      },
-    };
+    return res;
   }
 
-  async findAll(name: string) {
+  async findAllCategory(name: string) {
     const filterByName = name
       ? {
           name: {
@@ -44,71 +45,89 @@ export class CategoriesService {
         }
       : {};
 
-    const categories = await this.prisma.categories.findMany({
+    const category = await this.prismaService.category.findMany({
       where: {
         ...filterByName,
       },
     });
     return {
       status: 'success',
-      data: categories.map((category) => ({
-        uuid: category.uuid,
-        avatar_url: category.avatar_url,
-        name: category.name,
-        description: category.description,
-      })),
+      data: category,
     };
   }
 
-  async findOne(name: string) {
-    const category = await this.prisma.categories.findUniqueOrThrow({
+  async findCategoryByName(name: string) {
+    const category = await this.prismaService.category.findUnique({
       where: { name },
     });
+
+    if (!category) {
+      throw new NotFoundException(
+        'Category not found, please make sure you input correct category',
+      );
+    }
     return {
       status: 'success',
-      data: {
-        uuid: category.uuid,
-        avatar_url: category.avatar_url,
-        name: category.name,
-        description: category.description,
-      },
+      data: category,
     };
   }
 
-  async update(nameCategory: string, updateCategoryDto: UpdateCategoryDto) {
-    const { name, avatar_url, description } = updateCategoryDto;
-
-    const category = await this.prisma.categories.update({
-      where: {
-        name: nameCategory,
-      },
-      data: {
-        name,
-        avatar_url,
-        description,
-      },
+  async findCategoryByUuid(categoryUuid: string) {
+    const category = await this.prismaService.category.findUnique({
+      where: { uuid: categoryUuid },
     });
-
+    if (!category) {
+      throw new NotFoundException(
+        'Category not found, please make sure you input correct category',
+      );
+    }
     return {
       status: 'success',
-      message: 'Category succefully updated',
-      data: {
-        uuid: category.uuid,
-      },
+      data: category,
     };
   }
 
-  async remove(nameCategory: string) {
-    const category = await this.prisma.categories.delete({
-      where: { name: nameCategory },
+  async updateCategoryByName(
+    nameCategory: string,
+    updateCategoryDto: UpdateCategoryDto,
+  ) {
+    const { name, avatar, description } = updateCategoryDto;
+
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await this.findCategoryByName(nameCategory);
+      await prisma.category.update({
+        where: {
+          name: nameCategory,
+        },
+        data: {
+          name,
+          avatar,
+          description,
+        },
+      });
+
+      return {
+        status: 'success',
+        message: 'Category successfully updated!',
+      };
     });
 
-    return {
-      status: 'success',
-      message: 'category successfully deleted!',
-      data: {
-        uuid: category.uuid,
-      },
-    };
+    return res;
+  }
+
+  async removeCategoryByName(nameCategory: string) {
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await this.findCategoryByName(nameCategory);
+      await prisma.category.delete({
+        where: { name: nameCategory },
+      });
+
+      return {
+        status: 'success',
+        message: 'Category successfully deleted!',
+      };
+    });
+
+    return res;
   }
 }

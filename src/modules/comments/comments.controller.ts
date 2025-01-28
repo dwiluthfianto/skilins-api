@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
-import { CommentsService } from './comments.service';
+import { CommentService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -8,19 +8,19 @@ import { Roles } from '../roles/roles.decorator';
 import { DeleteCommentDto } from './dto/delete-comment.dto';
 
 @ApiTags('Like & Comment')
-@Controller({ path: 'api/v1/comments', version: '1' })
+@Controller({ path: 'comments', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @ApiBasicAuth('JWT-auth')
 @Roles('User', 'Student', 'Judge', 'Staff')
-export class CommentsController {
-  constructor(private readonly commentsService: CommentsService) {}
+export class CommentController {
+  constructor(private readonly commentsService: CommentService) {}
 
   @Post(':uuid/create')
   async CommentContent(
     @Param('uuid') uuid: string,
     @Body() createCommentDto: CreateCommentDto,
   ) {
-    return this.commentsService.create(uuid, createCommentDto);
+    return this.commentsService.createComment(uuid, createCommentDto);
   }
 
   // @Patch(':id')
@@ -33,6 +33,6 @@ export class CommentsController {
     @Param('uuid') contentUuid: string,
     @Body() deleteCommentDto: DeleteCommentDto,
   ) {
-    return this.commentsService.remove(contentUuid, deleteCommentDto);
+    return this.commentsService.removeComment(contentUuid, deleteCommentDto);
   }
 }

@@ -45,6 +45,7 @@ export class FindBlogQueryDto {
   @ApiPropertyOptional({
     type: ContentStatus,
     enum: ContentStatus,
+    enumName: 'Status approval content',
     description: 'Search by status approval of content',
   })
   @IsOptional()

@@ -1,4 +1,4 @@
-import { Comments, Ratings, Genres } from '@prisma/client';
+import { Comment, Rating, Genre } from '@prisma/client';
 
 export interface Contents {
   uuid: string;
@@ -9,7 +9,7 @@ export interface Contents {
   created_at: Date;
   updated_at: Date;
   category_id?: number;
-  genres: Genres[];
-  comments: Comments[];
-  ratings: Ratings[];
+  genres: Genre[];
+  comments: Comment[];
+  ratings: Rating[];
 }

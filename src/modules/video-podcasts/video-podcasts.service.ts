@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CreateVideoPodcastDto } from './dto/create-video-podcast.dto';
 import { UpdateVideoPodcastDto } from './dto/update-video-podcast.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -10,85 +14,85 @@ import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { subMonths } from 'date-fns';
 
 @Injectable()
-export class VideoPodcastsService {
+export class VideoPodcastService {
   constructor(
-    private prisma: PrismaService,
+    private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
-  async create(createVideoPodcastDto: CreateVideoPodcastDto) {
-    const {
-      title,
-      thumbnail,
-      description,
-      tags,
-      category_name,
-      file_url,
-      creator_uuid,
-      genres,
-    } = createVideoPodcastDto;
+  async create(
+    creatorUuid: string,
+    createVideoPodcastDto: CreateVideoPodcastDto,
+  ) {
+    const { title, thumbnail, description, tags, category_name, genres, link } =
+      createVideoPodcastDto;
 
-    const res = await this.prisma.$transaction(async (p) => {
+    const res = await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
-      const userData = await p.users.findUniqueOrThrow({
+      const userData = await prisma.user.findUniqueOrThrow({
         where: {
-          uuid: creator_uuid,
+          uuid: creatorUuid,
         },
         include: {
-          Students: {
-            select: {
-              uuid: true,
-            },
-          },
+          student: true,
         },
       });
 
       if (!userData) {
-        throw new NotFoundException('User not found!');
+        throw new NotFoundException(
+          'Student not found, please make sure you input correct student',
+        );
       }
-      const video = await p.contents.create({
+
+      await prisma.content.create({
         data: {
-          type: 'VIDEO',
+          type: 'Video',
           title,
           thumbnail,
           description,
-          Tags: {
-            connect: parsedTags?.map((tag) => ({
-              name: tag.text,
+          tag: {
+            connectOrCreate: parsedTags?.map((tag) => ({
+              where: {
+                name: tag.text,
+              },
+              create: {
+                name: tag.text,
+              },
             })),
           },
           slug: newSlug,
           category: { connect: { name: category_name } },
-          VideoPodcasts: {
+          video_podcast: {
             create: {
-              creator: { connect: { uuid: userData.Students[0].uuid } },
-              file_url,
+              creator_id: userData.student.id,
+              link: link,
             },
           },
-          Genres: {
-            connect: parsedGenres?.map((genre) => ({
-              name: genre.text,
+          genre: {
+            connectOrCreate: parsedGenres?.map((genre) => ({
+              where: {
+                name: genre.text,
+              },
+              create: {
+                name: genre.text,
+              },
             })),
           },
         },
       });
       return {
         status: 'success',
-        message: 'video successfully uploaded!',
-        data: {
-          uuid: video.uuid,
-          type: video.type,
-        },
+        message: 'Video successfully uploaded!',
       };
     });
 
     return res;
   }
 
-  async fetchVideos(findContentQueryDto: FindContentQueryDto) {
+  async findAllVideo(findContentQueryDto: FindContentQueryDto) {
     const { page, limit, category, tag, genre, search, status, latest } =
       findContentQueryDto;
     const currentDate = new Date();
@@ -97,7 +101,7 @@ export class VideoPodcastsService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.APPROVED,
+          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -133,7 +137,7 @@ export class VideoPodcastsService {
 
     const genreFilter = genre
       ? {
-          Genres: {
+          genre: {
             some: {
               name: {
                 equals: genre,
@@ -146,7 +150,7 @@ export class VideoPodcastsService {
 
     const tagFilter = tag
       ? {
-          Tags: {
+          tag: {
             some: {
               name: {
                 equals: tag,
@@ -166,32 +170,24 @@ export class VideoPodcastsService {
       ...tagFilter,
     };
 
-    const videos = await this.prisma.contents.findMany({
+    const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'VIDEO',
+        type: 'Video',
         ...filter,
       },
       include: {
-        category: true,
-        Ratings: true,
-        Tags: true,
-        Genres: true,
-        VideoPodcasts: {
-          include: {
-            creator: true,
-          },
-        },
+        rating: true,
       },
     });
 
-    const total = await this.prisma.contents.count({
-      where: { type: 'VIDEO', ...filter },
+    const total = await this.prismaService.content.count({
+      where: { type: 'Video', ...filter },
     });
 
     const data = await Promise.all(
       videos.map(async (video) => {
-        const avgRatingResult = await this.prisma.ratings.aggregate({
+        const avgRatingResult = await this.prismaService.rating.aggregate({
           where: { content_id: video.id },
           _avg: {
             rating_value: true,
@@ -200,24 +196,7 @@ export class VideoPodcastsService {
         const avg_rating = avgRatingResult._avg.rating_value || 0;
 
         return {
-          uuid: video.uuid,
-          thumbnail: video.thumbnail,
-          title: video.title,
-          description: video.description,
-          slug: video.slug,
-          tags: video.Tags.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          genres: video.Genres.map((genre) => ({
-            id: genre.uuid,
-            text: genre.name,
-          })),
-          created_at: video.created_at,
-          updated_at: video.updated_at,
-          category: video.category.name,
-          creator: video.VideoPodcasts[0].creator.name,
-          file_url: video.VideoPodcasts[0].file_url,
+          ...video,
           avg_rating,
         };
       }),
@@ -226,9 +205,12 @@ export class VideoPodcastsService {
     return {
       status: 'success',
       data,
-      totalPages: total,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
@@ -239,12 +221,14 @@ export class VideoPodcastsService {
     const { page, limit, category, tag, genre, search, status, latest } =
       findContentQueryDto;
 
-    const user = await this.prisma.users.findUnique({
+    const user = await this.prismaService.user.findUnique({
       where: { uuid: userUuid },
     });
 
     if (!user) {
-      throw new NotFoundException(404, 'Your account has been deleted');
+      throw new NotFoundException(
+        'Student not found, please make sure you input correct Student',
+      );
     }
 
     const currentDate = new Date();
@@ -252,18 +236,16 @@ export class VideoPodcastsService {
     const twoMonthsAgo = subMonths(currentDate, 2);
 
     const filterByUser = {
-      AudioPodcasts: {
-        some: {
-          creator: {
-            user: { uuid: user.uuid },
-          },
+      video_podcast: {
+        creator: {
+          user_id: user.id,
         },
       },
     };
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.APPROVED,
+          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -299,7 +281,7 @@ export class VideoPodcastsService {
 
     const genreFilter = genre
       ? {
-          Genres: {
+          genre: {
             some: {
               name: {
                 equals: genre,
@@ -312,7 +294,7 @@ export class VideoPodcastsService {
 
     const tagFilter = tag
       ? {
-          Tags: {
+          tag: {
             some: {
               name: {
                 equals: tag,
@@ -333,29 +315,24 @@ export class VideoPodcastsService {
       ...tagFilter,
     };
 
-    const videos = await this.prisma.contents.findMany({
+    const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'VIDEO',
+        type: 'Video',
         ...filter,
-      },
-      include: {
-        category: true,
-        Ratings: true,
-        Tags: true,
-        Genres: true,
-        VideoPodcasts: {
-          include: {
-            creator: true,
-          },
-        },
       },
     });
 
-    const total = await this.prisma.videoPodcasts.count();
+    const total = await this.prismaService.content.count({
+      where: {
+        type: 'Video',
+        ...filter,
+      },
+    });
+
     const data = await Promise.all(
       videos.map(async (video) => {
-        const avgRatingResult = await this.prisma.ratings.aggregate({
+        const avgRatingResult = await this.prismaService.rating.aggregate({
           where: { content_id: video.id },
           _avg: {
             rating_value: true,
@@ -364,24 +341,7 @@ export class VideoPodcastsService {
         const avg_rating = avgRatingResult._avg.rating_value || 0;
 
         return {
-          uuid: video.uuid,
-          thumbnail: video.thumbnail,
-          title: video.title,
-          description: video.description,
-          slug: video.slug,
-          tags: video.Tags.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          genres: video.Genres.map((genre) => ({
-            id: genre.uuid,
-            text: genre.name,
-          })),
-          created_at: video.created_at,
-          updated_at: video.updated_at,
-          category: video.category.name,
-          creator: video.VideoPodcasts[0].creator.name,
-          file_url: video.VideoPodcasts[0].file_url,
+          ...video,
           avg_rating,
         };
       }),
@@ -390,96 +350,71 @@ export class VideoPodcastsService {
     return {
       status: 'success',
       data,
-      totalPages: limit ? Math.ceil(total / limit) : 1,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
-  async findOne(uuid: string) {
-    const video = await this.prisma.contents.findUniqueOrThrow({
+  async findVideoByUuid(uuid: string) {
+    const video = await this.prismaService.content.findUnique({
       where: { uuid },
-      include: {
-        category: true,
-        Genres: true,
-        Ratings: true,
-        Comments: true,
-        Tags: true,
-        VideoPodcasts: {
-          include: {
-            creator: true,
-          },
-        },
-      },
     });
 
-    const avg_rating = await this.prisma.ratings.aggregate({
-      where: { content_id: video.id },
-      _avg: {
-        rating_value: true,
-      },
-    });
+    if (!video) {
+      throw new NotFoundException(
+        'Video not found, please make sure you input correct video',
+      );
+    }
 
     return {
       status: 'success',
-      data: {
-        uuid: video.uuid,
-        thumbnail: video.thumbnail,
-        title: video.title,
-        description: video.description,
-        slug: video.slug,
-        tags: video.Tags.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        created_at: video.created_at,
-        updated_at: video.updated_at,
-        category: video.category.name,
-        creator: video.VideoPodcasts[0].creator.name,
-        file_url: video.VideoPodcasts[0].file_url,
-        genres: video.Genres.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comments: video.Comments.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          commented_by: comment.commented_by,
-        })),
-        avg_rating,
-      },
+      data: video,
     };
   }
 
-  async findOneBySlug(slug: string) {
-    const video = await this.prisma.contents.findUniqueOrThrow({
+  async findVideoBySlug(slug: string) {
+    const video = await this.prismaService.content.findUnique({
       where: { slug },
       include: {
         category: true,
-        Genres: true,
-        Ratings: true,
-        Comments: true,
-        Tags: true,
-        VideoPodcasts: {
+        genre: true,
+        rating: true,
+        comment: {
           include: {
-            creator: true,
-          },
-        },
-        Submissions: {
-          include: {
-            competition: {
+            user: {
               select: {
                 uuid: true,
+                full_name: true,
+                profile: true,
               },
             },
           },
         },
+        tag: true,
+        video_podcast: {
+          include: {
+            creator: true,
+          },
+        },
+        submission: {
+          include: {
+            competition: true,
+          },
+        },
       },
     });
 
-    const avg_rating = await this.prisma.ratings.aggregate({
+    if (!video) {
+      throw new NotFoundException(
+        'Video not found, please make sure you input correct video',
+      );
+    }
+
+    const avg_rating = await this.prismaService.rating.aggregate({
       where: { content_id: video.id },
       _avg: {
         rating_value: true,
@@ -489,53 +424,64 @@ export class VideoPodcastsService {
     return {
       status: 'success',
       data: {
-        uuid: video.uuid,
-        thumbnail: video.thumbnail,
-        title: video.title,
-        description: video.description,
-        slug: video.slug,
-        tags: video.Tags.map((tag) => ({
+        ...video,
+        tag: video.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        created_at: video.created_at,
-        updated_at: video.updated_at,
-        category: video.category.name,
-        creator: video.VideoPodcasts[0].creator.name,
-        file_url: video.VideoPodcasts[0].file_url,
-        genres: video.Genres.map((genre) => ({
+        genre: video.genre.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),
-        comments: video.Comments.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          commented_by: comment.commented_by,
+        comment: video.comment.map((comment) => ({
+          ...comment,
+          commented_by_uuid: comment.user.uuid,
+          commented_by: comment.user.full_name,
+          profile: comment.user.profile,
         })),
-        submission_uuid: video.Submissions[0].uuid || '',
         avg_rating: avg_rating._avg.rating_value,
-        competition_uuid: video.Submissions[0].competition.uuid,
       },
     };
   }
 
-  async update(uuid: string, updateVideoPodcastDto: UpdateVideoPodcastDto) {
-    const {
-      title,
-      thumbnail,
-      description,
-      tags,
-      category_name,
-      file_url,
-      creator_uuid,
-      genres,
-    } = updateVideoPodcastDto;
+  async updateVideoByUuid(
+    uuid: string,
+    creatorUuid: string,
+    updateVideoPodcastDto: UpdateVideoPodcastDto,
+  ) {
+    const { title, thumbnail, description, tags, category_name, genres, link } =
+      updateVideoPodcastDto;
 
-    const res = await this.prisma.$transaction(async (p) => {
-      const content = await this.uuidHelper.validateUuidContent(uuid);
-      const creator = await this.uuidHelper.validateUuidCreator(creator_uuid);
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const content = await prisma.content.findUnique({
+        where: {
+          uuid,
+        },
+        select: {
+          id: true,
+          uuid: true,
+          video_podcast: {
+            select: {
+              uuid: true,
+              creator_id: true,
+            },
+          },
+        },
+      });
+
+      if (!content) {
+        throw new NotFoundException(
+          'Content not found, please make sure you input correct content',
+        );
+      }
+      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
+
+      if (creator.student.id !== content.video_podcast.creator_id) {
+        throw new UnauthorizedException(
+          `You don't have any permission to update this audio`,
+        );
+      }
+
       const category =
         await this.uuidHelper.validateUuidCategory(category_name);
 
@@ -543,33 +489,44 @@ export class VideoPodcastsService {
       const parsedTags = parseArrayInput(tags);
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
-      const video = await p.contents.update({
-        where: { uuid, type: 'VIDEO' },
+
+      await prisma.content.update({
+        where: { uuid, type: 'Video' },
         data: {
           title,
           thumbnail,
           description,
-          Tags: {
-            connect: parsedTags?.map((tag) => ({
-              name: tag.text,
+          tag: {
+            connectOrCreate: parsedTags?.map((tag) => ({
+              where: {
+                name: tag.text,
+              },
+              create: {
+                name: tag.text,
+              },
             })),
           },
           category: { connect: { uuid: category.uuid } },
           slug: newSlug,
-          VideoPodcasts: {
+          video_podcast: {
             update: {
               where: {
                 content_id: content.id,
-                creator_id: creator.Students[0].id,
+                creator_id: creator.student.id,
               },
               data: {
-                file_url,
+                link,
               },
             },
           },
-          Genres: {
-            connect: parsedGenres?.map((genre) => ({
-              name: genre.text,
+          genre: {
+            connectOrCreate: parsedGenres?.map((genre) => ({
+              where: {
+                name: genre.text,
+              },
+              create: {
+                name: genre.text,
+              },
             })),
           },
         },
@@ -577,27 +534,25 @@ export class VideoPodcastsService {
       return {
         status: 'success',
         message: 'video successfully updated!',
-        data: {
-          uuid: video.uuid,
-        },
       };
     });
 
     return res;
   }
 
-  async remove(uuid: string) {
-    await this.uuidHelper.validateUuidContent(uuid);
+  async removeVideoByUuid(contentUuid: string) {
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await this.uuidHelper.validateUuidContent(contentUuid);
 
-    const video = await this.prisma.contents.delete({
-      where: { uuid },
+      await prisma.content.delete({
+        where: { uuid: contentUuid },
+      });
+      return {
+        status: 'success',
+        message: 'Video successfully deleted!',
+      };
     });
-    return {
-      status: 'success',
-      message: 'video successfully deleted!',
-      data: {
-        uuid: video.uuid,
-      },
-    };
+
+    return res;
   }
 }

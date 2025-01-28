@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { AudioPodcastsService } from './audio-podcasts.service';
-import { AudioPodcastsController } from './audio-podcasts.controller';
+import { AudioPodcastService } from './audio-podcasts.service';
+import { AudioPodcastController } from './audio-podcasts.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { SupabaseService } from 'src/supabase';
+
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
-  controllers: [AudioPodcastsController],
-  providers: [AudioPodcastsService, SupabaseService, UuidHelper, SlugHelper],
+  controllers: [AudioPodcastController],
+  providers: [AudioPodcastService, UuidHelper, SlugHelper, FileUploadService],
   imports: [PrismaModule],
 })
-export class AudioPodcastsModule {}
+export class AudioPodcastModule {}

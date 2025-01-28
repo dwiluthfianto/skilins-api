@@ -1,32 +1,36 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ContentStatus } from '@prisma/client';
 
 @Injectable()
-export class ContentsService {
+export class ContentService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
   ) {}
 
   async updateContentStatus(uuid: string, status: ContentStatus) {
-    const content = await this.uuidHelper.validateUuidContent(uuid);
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const content = await this.uuidHelper.validateUuidContent(uuid);
 
-    await this.prisma.contents.update({
-      where: { id: content.id },
-      data: {
-        status: status,
-      },
+      await prisma.content.update({
+        where: { id: content.id },
+        data: {
+          status: status,
+        },
+      });
+
+      return {
+        status: 'success',
+        message: `Content status updated to ${status}`,
+        data: {
+          uuid,
+          status: status,
+        },
+      };
     });
 
-    return {
-      status: 'success',
-      message: `Content status updated to ${status}`,
-      data: {
-        uuid,
-        status: status,
-      },
-    };
+    return res;
   }
 }

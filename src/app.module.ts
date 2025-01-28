@@ -2,49 +2,53 @@ import { Module } from '@nestjs/common';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
-import { EbooksModule } from './modules/ebooks/ebooks.module';
-import { CategoriesModule } from './modules/categories/categories.module';
-import { AudioPodcastsModule } from './modules/audio-podcasts/audio-podcasts.module';
-import { VideoPodcastsModule } from './modules/video-podcasts/video-podcasts.module';
-import { BlogsModule } from './modules/blogs/blogs.module';
-import { StudentsModule } from './modules/students/students.module';
-import { MajorsModule } from './modules/majors/majors.module';
-import { CommentsModule } from './modules/comments/comments.module';
-import { SupabaseModule } from './supabase/supabase.module';
+import { EbookModule } from './modules/ebooks/ebooks.module';
+import { CategoryModule } from './modules/categories/categories.module';
+import { AudioPodcastModule } from './modules/audio-podcasts/audio-podcasts.module';
+import { VideoPodcastModule } from './modules/video-podcasts/video-podcasts.module';
+import { BlogModule } from './modules/blogs/blogs.module';
+import { StudentModule } from './modules/students/students.module';
+import { MajorModule } from './modules/majors/majors.module';
+import { CommentModule } from './modules/comments/comments.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { UsersModule } from './modules/users/users.module';
+import { UserModule } from './modules/users/users.module';
 import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 // import { ThrottlerModule } from '@nestjs/throttler';
 import { MailerConfigModule } from './modules/mailer/mailer.module';
 import { HealthModule } from './modules/health/health.module';
-import { GenresModule } from './modules/genres/genres.module';
-import { RatingsModule } from './modules/ratings/ratings.module';
-import { ContentsModule } from './modules/contents/contents.module';
-import { CompetitionsModule } from './modules/competitions/competitions.module';
+import { GenreModule } from './modules/genres/genres.module';
+import { RatingModule } from './modules/ratings/ratings.module';
+import { ContentModule } from './modules/contents/contents.module';
+import { CompetitionModule } from './modules/competitions/competitions.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TagsModule } from './modules/tags/tags.module';
+import { TagModule } from './modules/tags/tags.module';
 import { PrakerinModule } from './modules/prakerin/prakerin.module';
-import { StoriesModule } from './modules/stories/stories.module';
+import { StoryModule } from './modules/stories/stories.module';
+import { FileUploadModule } from './modules/file-upload/file-upload.module';
+import { join } from 'path';
+import { ServeStaticModule } from '@nestjs/serve-static';
 
 @Module({
   imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'), // Folder "uploads" sebagai root file statis
+      serveRoot: '/public', // URL akses publik, contoh: http://localhost:3000/uploads/
+    }),
     PrismaModule,
-    EbooksModule,
-    CategoriesModule,
-    AudioPodcastsModule,
-    VideoPodcastsModule,
-    BlogsModule,
-    StudentsModule,
-    MajorsModule,
-    CommentsModule,
-    SupabaseModule,
+    EbookModule,
+    CategoryModule,
+    AudioPodcastModule,
+    VideoPodcastModule,
+    BlogModule,
+    StudentModule,
+    MajorModule,
+    CommentModule,
     AuthModule,
-    UsersModule,
+    UserModule,
     ConfigModule.forRoot(),
     PassportModule,
-    SupabaseModule,
     AnalyticsModule,
     // ThrottlerModule.forRoot([
     //   {
@@ -55,13 +59,14 @@ import { StoriesModule } from './modules/stories/stories.module';
     ScheduleModule.forRoot(),
     MailerConfigModule,
     HealthModule,
-    GenresModule,
-    RatingsModule,
-    ContentsModule,
-    CompetitionsModule,
-    TagsModule,
+    GenreModule,
+    RatingModule,
+    ContentModule,
+    CompetitionModule,
+    TagModule,
     PrakerinModule,
-    StoriesModule,
+    StoryModule,
+    FileUploadModule,
   ],
   controllers: [],
   providers: [PrismaService],

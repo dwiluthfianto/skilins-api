@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { MajorsService } from './majors.service';
-import { MajorsController } from './majors.controller';
+import { MajorService } from './majors.service';
+import { MajorController } from './majors.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { SupabaseService } from 'src/supabase';
+
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
-  controllers: [MajorsController],
-  providers: [MajorsService, SupabaseService, UuidHelper],
+  controllers: [MajorController],
+  providers: [MajorService, UuidHelper, FileUploadService],
   imports: [PrismaModule],
 })
-export class MajorsModule {}
+export class MajorModule {}

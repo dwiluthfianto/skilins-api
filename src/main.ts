@@ -5,9 +5,17 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 // import * as csurf from 'csurf';
+import * as fs from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const uploadDir = './uploads';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+  }
+
+  app.setGlobalPrefix('/v1/api');
 
   const config = new DocumentBuilder()
     .setTitle('Skilins')

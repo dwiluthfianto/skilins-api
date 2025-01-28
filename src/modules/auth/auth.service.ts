@@ -4,7 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthEmailLoginDto } from './dto/auth-email-login.dto';
 import { AuthRegisterLoginDto } from './dto/auth-register-login.dto';
 import * as bcrypt from 'bcrypt';
-import { UsersService } from '../users/users.service';
+import { UserService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import { AuthForgotPasswordDto } from './dto/auth-forgot-password.dto';
@@ -13,27 +13,28 @@ import ms from 'ms';
 import { AuthChangePasswordDto } from './dto/auth-change-password.dto';
 import { RoleType } from '@prisma/client';
 import { AuthRegisterStudentDto } from './dto/auth-register-student.dto';
+import { addMinutes } from 'date-fns';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prismaService: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly userService: UsersService,
+    private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly mailerService: MailerService,
   ) {}
 
   async sendVerificationEmail(uuid: string) {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid },
-      include: { roles: true },
+      include: { role: true },
     });
 
     const token = this.jwtService.sign(
-      { email: user.email, sub: user.uuid, role: user.roles.name },
+      { email: user.email, sub: user.uuid, role: user.role.name },
       {
         secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
         expiresIn: this.configService.get<string>(
@@ -62,13 +63,13 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
       });
-      const user = await this.prisma.users.findUniqueOrThrow({
+      const user = await this.prismaService.user.findUniqueOrThrow({
         where: { uuid: payload.sub },
       });
 
-      await this.prisma.users.update({
+      await this.prismaService.user.update({
         where: { uuid: user.uuid },
-        data: { emailVerified: true },
+        data: { email_verified: true },
       });
 
       this.logger.log(`User ${user.email} has been verified`);
@@ -85,13 +86,13 @@ export class AuthService {
   // Mengirim email untuk reset password
   async sendPasswordResetEmail(authForgotPasswordDto: AuthForgotPasswordDto) {
     const { email } = authForgotPasswordDto;
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { email },
-      include: { roles: true },
+      include: { role: true },
     });
 
     const token = this.jwtService.sign(
-      { email: user.email, sub: user.uuid, role: user.roles.name },
+      { email: user.email, sub: user.uuid, role: user.role.name },
       {
         secret: this.configService.get<string>('AUTH_FORGOT_SECRET'),
         expiresIn: this.configService.get<string>(
@@ -100,17 +101,18 @@ export class AuthService {
       },
     );
 
-    const resetTokenExpires = new Date(
-      Date.now() +
-        ms(this.configService.get<string>('AUTH_FORGOT_TOKEN_EXPIRES_IN')),
+    const expiresIn = this.configService.get<string>(
+      'AUTH_FORGOT_TOKEN_EXPIRES_IN',
     );
+    const minutes = parseInt(expiresIn, 10);
+    const reset_token_expires = addMinutes(new Date(), minutes);
 
     const hashedToken = await bcrypt.hash(token, 10);
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { email: user.email },
       data: {
-        resetPasswordToken: hashedToken,
-        resetTokenExpires,
+        reset_password_token: hashedToken,
+        reset_token_expires: reset_token_expires,
       },
     });
 
@@ -134,26 +136,29 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('AUTH_FORGOT_SECRET'),
       });
-      const user = await this.prisma.users.findUniqueOrThrow({
+      const user = await this.prismaService.user.findUniqueOrThrow({
         where: { uuid: payload.sub },
       });
 
-      if (user.resetTokenExpires && user.resetTokenExpires < new Date()) {
+      if (user.reset_token_expires && user.reset_token_expires < new Date()) {
         throw new UnauthorizedException('Token has expired');
       }
 
-      const isTokenValid = await bcrypt.compare(token, user.resetPasswordToken);
+      const isTokenValid = await bcrypt.compare(
+        token,
+        user.reset_password_token,
+      );
       if (!isTokenValid) {
         throw new UnauthorizedException('Invalid token');
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await this.prisma.users.update({
+      await this.prismaService.user.update({
         where: { id: user.id },
         data: {
           password: hashedPassword,
-          resetPasswordToken: null,
-          resetTokenExpires: null,
+          reset_password_token: null,
+          reset_token_expires: null,
         },
       });
     } catch (e) {
@@ -164,7 +169,7 @@ export class AuthService {
 
   async changePassword(authChangePassworddDto: AuthChangePasswordDto) {
     const { email, currentPassword, newPassword } = authChangePassworddDto;
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { email },
     });
 
@@ -179,12 +184,12 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { id: user.id },
       data: {
         password: hashedPassword,
-        resetPasswordToken: null,
-        resetTokenExpires: null,
+        reset_password_token: null,
+        reset_token_expires: null,
       },
     });
 
@@ -196,13 +201,13 @@ export class AuthService {
 
   // Mengganti email pengguna
   async changeEmail(uuid: string, newEmail: string) {
-    await this.prisma.users.findUniqueOrThrow({
+    await this.prismaService.user.findUniqueOrThrow({
       where: { email: newEmail },
     });
 
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { uuid },
-      data: { email: newEmail, emailVerified: false },
+      data: { email: newEmail, email_verified: false },
     });
 
     await this.sendVerificationEmail(uuid);
@@ -211,9 +216,9 @@ export class AuthService {
   async login(
     authEmailLoginDto: AuthEmailLoginDto,
   ): Promise<{ accessToken?: string; refreshToken?: string; data?: any }> {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { email: authEmailLoginDto.email },
-      include: { roles: true },
+      include: { role: true },
     });
 
     if (
@@ -226,7 +231,7 @@ export class AuthService {
     const payload = {
       email: user.email,
       sub: user.uuid,
-      role: user.roles.name,
+      role: user.role.name,
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('AUTH_JWT_SECRET'),
@@ -253,17 +258,17 @@ export class AuthService {
   async register(authRegisterLoginDto: AuthRegisterLoginDto) {
     const hashedPassword = await bcrypt.hash(authRegisterLoginDto.password, 10);
 
-    const role = await this.prisma.roles.findUniqueOrThrow({
+    const role = await this.prismaService.role.findUnique({
       where: { name: RoleType.User },
     });
 
-    const user = await this.prisma.users.create({
+    const user = await this.prismaService.user.create({
       data: {
         email: authRegisterLoginDto.email,
         password: hashedPassword,
         full_name: authRegisterLoginDto.full_name,
-        emailVerified: false,
-        roles: { connect: { uuid: role.uuid } },
+        email_verified: false,
+        role: { connect: { uuid: role.uuid } },
       },
     });
     await this.sendVerificationEmail(user.uuid);
@@ -283,49 +288,49 @@ export class AuthService {
       authRegisterStudentDto.password,
       10,
     );
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const role = await prisma.role.findUniqueOrThrow({
+        where: { name: RoleType.User },
+      });
 
-    const role = await this.prisma.roles.findUniqueOrThrow({
-      where: { name: RoleType.User },
+      const user = await prisma.user.create({
+        data: {
+          email: authRegisterStudentDto.email,
+          password: hashedPassword,
+          full_name: authRegisterStudentDto.full_name,
+          email_verified: false,
+          role: { connect: { uuid: role.uuid } },
+        },
+      });
+
+      await prisma.student.create({
+        data: {
+          nis: authRegisterStudentDto.nis,
+          name: authRegisterStudentDto.name,
+          birthdate: authRegisterStudentDto.birthdate,
+          birthplace: authRegisterStudentDto.birthplace,
+          sex: authRegisterStudentDto.sex,
+          user: { connect: { uuid: user.uuid } },
+          major: { connect: { name: authRegisterStudentDto.major } },
+        },
+      });
+
+      await this.sendVerificationEmail(user.uuid);
+
+      return {
+        status: 'success',
+        message:
+          'Register successfully! Please check your email to verify your account.',
+      };
     });
 
-    const user = await this.prisma.users.create({
-      data: {
-        email: authRegisterStudentDto.email,
-        password: hashedPassword,
-        full_name: authRegisterStudentDto.full_name,
-        emailVerified: false,
-        roles: { connect: { uuid: role.uuid } },
-      },
-    });
-
-    await this.prisma.students.create({
-      data: {
-        nis: authRegisterStudentDto.nis,
-        name: authRegisterStudentDto.name,
-        birthdate: authRegisterStudentDto.birthdate,
-        birthplace: authRegisterStudentDto.birthplace,
-        sex: authRegisterStudentDto.sex,
-        user: { connect: { uuid: user.uuid } },
-        major: { connect: { name: authRegisterStudentDto.major } },
-      },
-    });
-
-    await this.sendVerificationEmail(user.uuid);
-
-    return {
-      status: 'success',
-      message:
-        'Register successful! Please check your email to verify your account.',
-      data: {
-        uuid: user.uuid,
-      },
-    };
+    return res;
   }
 
   async validateUser(uuid: string) {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid },
-      include: { roles: true },
+      include: { role: true },
     });
 
     return user;
@@ -373,11 +378,11 @@ export class AuthService {
     uuid: string,
     refreshToken: string,
   ): Promise<boolean> {
-    const user = await this.prisma.users.findUnique({ where: { uuid } });
+    const user = await this.prismaService.user.findUnique({ where: { uuid } });
 
-    if (!user || !user.refreshToken) return false;
+    if (!user || !user.refresh_token) return false;
 
-    return bcrypt.compare(refreshToken, user.refreshToken);
+    return bcrypt.compare(refreshToken, user.refresh_token);
   }
 
   async logout(uuid: string): Promise<void> {

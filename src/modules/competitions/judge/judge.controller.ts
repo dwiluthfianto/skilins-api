@@ -24,7 +24,7 @@ import { Request } from 'express';
 
 @ApiTags('Judge')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/judges', version: '1' })
+@Controller({ path: 'judges', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class JudgeController {
   constructor(private readonly judgeService: JudgeService) {}

@@ -13,10 +13,9 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
-  ParseFilePipeBuilder,
   Res,
 } from '@nestjs/common';
-import { StoriesService } from './stories.service';
+import { StoryService } from './stories.service';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { AddStoryEpisodeDto } from './dto/add-episode-story.dto.ts';
@@ -28,16 +27,15 @@ import { Roles } from '../roles/roles.decorator';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SupabaseService } from 'src/supabase';
-import { ContentFileEnum } from '../contents/content-file.enum';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Stories')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/contents/stories', version: '1' })
-export class StoriesController {
+@Controller({ path: 'contents/stories', version: '1' })
+export class StoryController {
   constructor(
-    private readonly storiesService: StoriesService,
-    private readonly supabaseService: SupabaseService,
+    private readonly storyService: StoryService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
@@ -46,53 +44,27 @@ export class StoriesController {
   @Roles('Student')
   @ApiConsumes('multipart/form-data')
   async createStory(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 500 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
+    @UploadedFile()
     thumbnail: Express.Multer.File,
     @Body() createStoryDto: CreateStoryDto,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    let thumbnailFilename: string;
+    const user = req.user;
     try {
-      if (thumbnail && thumbnail.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            thumbnail,
-            `skilins_storage/${ContentFileEnum.thumbnail}`,
-          );
-
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        thumbnailFilename = fileName;
-        createStoryDto.thumbnail = url;
-      }
-      const result = await this.storiesService.create(createStoryDto);
+      const file = this.fileUploadService.handleFileUpload(thumbnail);
+      createStoryDto.thumbnail = file.filePath;
+      const result = await this.storyService.create(
+        user['sub'],
+        createStoryDto,
+      );
       return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during Blog creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.thumbnail}${thumbnailFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
-        message: 'Failed to create prakerin and cleaned up uploaded files.',
+        message: 'Failed to create story.',
         detail: e.message,
       });
     }
@@ -104,21 +76,34 @@ export class StoriesController {
   addEpisodeToStory(
     @Param('storyUuid') storyUuid: string,
     @Req() req: Request,
+    @Res() res: Response,
     @Body() addStoryEpisodeDto: AddStoryEpisodeDto,
   ) {
     const user = req.user;
-    const authorUuid = user['sub'];
-    return this.storiesService.addEpisode(
-      storyUuid,
-      authorUuid,
-      addStoryEpisodeDto,
-    );
+    try {
+      const authorUuid = user['sub'];
+      const result = this.storyService.addEpisode(
+        storyUuid,
+        authorUuid,
+        addStoryEpisodeDto,
+      );
+
+      return res.status(HttpStatus.CREATED).json(result);
+    } catch (e) {
+      console.error('Error during Blog creation:', e.message);
+
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to create story.',
+        detail: e.message,
+      });
+    }
   }
 
   @Get()
   @HttpCode(HttpStatus.OK)
   findAll(@Query() query: FindContentQueryDto) {
-    return this.storiesService.fetchStories(query);
+    return this.storyService.findAllStory(query);
   }
 
   @Get('student')
@@ -130,22 +115,22 @@ export class StoriesController {
     @Query() query: FindContentQueryDto,
   ) {
     const user = req.user;
-    return await this.storiesService.fetchUserStories(user['sub'], query);
+    return await this.storyService.fetchUserStories(user['sub'], query);
   }
 
   @Get(':slug')
   getStoryWithEpisodes(@Param('slug') slug: string) {
-    return this.storiesService.getStoryBySlug(slug);
+    return this.storyService.getStoryBySlug(slug);
   }
 
   @Get('episode/:slug')
   getOneEpisode(@Param('slug') slug: string, @Query('order') order: number) {
-    return this.storiesService.getOneEpisode(slug, order);
+    return this.storyService.getOneEpisode(slug, order);
   }
 
   @Get('episodes/:slug')
   getEpisode(@Param('slug') slug: string, @Query('order') order: number) {
-    return this.storiesService.getEpisode(slug, order);
+    return this.storyService.getEpisode(slug, order);
   }
 
   @Patch('episodes/:episodeUuid')
@@ -158,7 +143,7 @@ export class StoriesController {
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
-    return this.storiesService.updateEpisode(
+    return this.storyService.updateEpisode(
       episodeUuid,
       authorUuid,
       updateStoryEpisodeDto,
@@ -174,7 +159,7 @@ export class StoriesController {
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
-    return this.storiesService.updateStory(
+    return this.storyService.updateStory(
       contentUuid,
       authorUuid,
       updateStoryDto,
@@ -183,22 +168,15 @@ export class StoriesController {
 
   @Delete('episodes/:episodeUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
-  deleteEpisode(
-    @Param('episodeUuid') episodeUuid: string,
-    @Req() req: Request,
-  ) {
-    const user = req.user;
-    const authorUuid = user['sub'];
-    return this.storiesService.deleteEpisode(episodeUuid, authorUuid);
+  @Roles('Student', 'Staff')
+  deleteEpisode(@Param('episodeUuid') episodeUuid: string) {
+    return this.storyService.deleteEpisode(episodeUuid);
   }
 
   @Delete(':storyUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
-  deleteStory(@Param('storyUuid') storyUuid: string, @Req() req: Request) {
-    const user = req.user;
-    const authorUuid = user['sub'];
-    return this.storiesService.deleteStory(storyUuid, authorUuid);
+  @Roles('Student', 'Staff')
+  deleteStory(@Param('storyUuid') storyUuid: string) {
+    return this.storyService.deleteStory(storyUuid);
   }
 }

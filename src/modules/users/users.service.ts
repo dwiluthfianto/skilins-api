@@ -4,33 +4,33 @@ import { RoleUserDto } from './dto/role-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
-export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+export class UserService {
+  constructor(private readonly prismaService: PrismaService) {}
 
   async findOne(uuid: string) {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid },
-      include: { roles: true },
+      include: { role: true },
     });
 
     return {
       status: 'success',
       data: {
         uuid: user.uuid,
-        profile: user.profile_url,
+        profile: user.profile,
         email: user.email,
         full_name: user.full_name,
-        email_verified: user.emailVerified,
-        role: user.roles.name,
+        email_verified: user.email_verified,
+        role: user.role.name,
       },
     };
   }
   async removeUser(uuid: string) {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid },
     });
 
-    await this.prisma.users.delete({
+    await this.prismaService.user.delete({
       where: { uuid: user.uuid },
     });
 
@@ -41,43 +41,43 @@ export class UsersService {
   }
 
   async assignRoleToUser(roleUser: RoleUserDto) {
-    return await this.prisma.users.update({
+    return await this.prismaService.user.update({
       where: { uuid: roleUser.uuid },
-      data: { roles: { connect: { name: roleUser.role } } },
+      data: { role: { connect: { name: roleUser.role } } },
     });
   }
 
   async findAll() {
-    return await this.prisma.users.findMany({
-      include: { roles: true },
+    return await this.prismaService.user.findMany({
+      include: { role: true },
     });
   }
 
   async updateRefreshToken(uuid: string, refreshToken: string) {
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { uuid },
       data: {
-        refreshToken: hashedRefreshToken,
+        refresh_token: hashedRefreshToken,
       },
     });
   }
 
   async clearRefreshToken(uuid: string): Promise<void> {
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { uuid },
       data: {
-        refreshToken: null,
+        refresh_token: null,
       },
     });
   }
 
   async updateProfile(uuid: string, profile: string): Promise<void> {
-    await this.prisma.users.update({
+    await this.prismaService.user.update({
       where: { uuid },
       data: {
-        profile_url: profile,
+        profile: profile,
       },
     });
   }

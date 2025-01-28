@@ -17,7 +17,7 @@ export class Major {
     example: 'this is an image',
     type: String,
   })
-  image_url: string;
+  image: string;
 
   @ApiProperty({
     example: 'this is a description',
@@ -29,5 +29,5 @@ export class Major {
     example: 'this is an avatar',
     type: String,
   })
-  avatar_url: string;
+  avatar: string;
 }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Comments, Ratings, Genres } from '@prisma/client';
+import { Comment, Rating, Genre } from '@prisma/client';
 import { Contents } from 'src/modules/contents/content.interface';
 
 export class AudioPodcast implements Contents {
@@ -64,13 +64,13 @@ export class AudioPodcast implements Contents {
   creator_uuid: string;
 
   @ApiProperty({ example: '[]', type: String })
-  genres: Genres[];
+  genres: Genre[];
 
   @ApiProperty({ example: '[]', type: String })
-  comments: Comments[];
+  comments: Comment[];
 
   @ApiProperty({ example: '[]', type: String })
-  ratings: Ratings[];
+  ratings: Rating[];
   @ApiProperty({
     example: 2.3,
     type: String,

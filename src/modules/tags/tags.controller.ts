@@ -11,16 +11,18 @@ import {
   HttpCode,
   UseInterceptors,
   UploadedFile,
-  HttpException,
-  ParseFilePipeBuilder,
+  Res,
+  Query,
 } from '@nestjs/common';
-import { TagsService } from './tags.service';
+import { TagService } from './tags.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiOkResponse,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
@@ -28,130 +30,97 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { Tag } from './entities/tag.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SupabaseService } from 'src/supabase';
-import { ContentFileEnum } from '../contents/content-file.enum';
+import { Response } from 'express';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Tag')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/tags', version: '1' })
-export class TagsController {
+@Controller({ path: 'tags', version: '1' })
+export class TagController {
   constructor(
-    private readonly tagsService: TagsService,
-    private readonly supabaseService: SupabaseService,
+    private readonly tagService: TagService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Tag })
-  @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
   async create(
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 2 * 1024 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
-    avatar_url: Express.Multer.File,
+    @UploadedFile()
+    avatar: Express.Multer.File,
     @Body() createTagDto: CreateTagDto,
+    @Res() res: Response,
   ) {
-    let avatarFilename: string;
     try {
-      if (avatar_url && avatar_url.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            avatar_url,
-            `skilins_storage/${ContentFileEnum.avatar}`,
-          );
+      const file = this.fileUploadService.handleFileUpload(avatar);
+      createTagDto.avatar = file.filePath;
+      const result = await this.tagService.create(createTagDto);
 
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        avatarFilename = fileName;
-        createTagDto.avatar_url = url;
-      }
-      return await this.tagsService.create(createTagDto);
+      return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during tag creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.avatar}${avatarFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-      throw new HttpException(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          error: `Tag creation failed: ${e.message}. ${avatarFilename ? 'Failed to clean up uploaded file' : ''}`,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to create tag.',
+        detail: e.message,
+      });
     }
   }
 
   @Get()
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
-  findAll() {
-    return this.tagsService.findAll();
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'search by name for categories',
+  })
+  findAll(@Query('search') search: string) {
+    return this.tagService.findAll(search);
   }
 
   @Get(':name')
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
   findOne(@Param('name') name: string) {
-    return this.tagsService.findOne(name);
+    return this.tagService.findOneByName(name);
   }
 
   @Patch(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('Staff')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Tag })
-  @HttpCode(HttpStatus.OK)
   async update(
     @Param('uuid') uuid: string,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: '.(png|jpeg|jpg)',
-        })
-        .addMaxSizeValidator({
-          maxSize: 2 * 1024 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-        }),
-    )
-    avatar_url: Express.Multer.File,
+    @UploadedFile()
+    avatar: Express.Multer.File,
     @Body() updateTagDto: UpdateTagDto,
+    @Res() res: Response,
   ) {
-    const tag = await this.tagsService.update(uuid, updateTagDto);
-    if (tag.status === 'success') {
-      const isExist = await this.tagsService.findOneByUuid(uuid);
-      if (avatar_url && avatar_url.size > 0) {
-        const avatarFilename = isExist.data.avatar_url.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.avatar}${avatarFilename}`,
-          avatar_url,
-        );
-        if (!success) {
-          throw new Error(`Failed to update avatar: ${error}`);
-        }
-      }
-    }
+    try {
+      const isExist = await this.tagService.findOneByUuid(uuid);
+      const file = this.fileUploadService.updateFile(
+        isExist.data.avatar,
+        avatar,
+      );
+      updateTagDto.avatar = file.filePath;
+      const tag = await this.tagService.update(uuid, updateTagDto);
 
-    return tag;
+      return res.status(HttpStatus.OK).json(tag);
+    } catch (error) {
+      console.error('Error updating genre:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to update genre',
+        detail: error.message,
+      });
+    }
   }
 
   @Delete(':uuid')
@@ -159,23 +128,20 @@ export class TagsController {
   @Roles('Staff')
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string) {
-    const isExist = await this.tagsService.findOneByUuid(uuid);
-    const thumbFilename = isExist?.data?.avatar_url
-      ? isExist.data.avatar_url.split('/').pop().replace(/%20/g, ' ')
-      : null;
-    if (isExist) {
-      const tag = await this.tagsService.remove(uuid);
-      if (tag.status === 'success') {
-        const { success, error } = await this.supabaseService.deleteFile([
-          `${ContentFileEnum.avatar}${thumbFilename}`,
-        ]);
+  async remove(@Param('uuid') uuid: string, @Res() res: Response) {
+    try {
+      const isExist = await this.tagService.findOneByUuid(uuid);
+      this.fileUploadService.deleteFile(isExist.data.avatar);
 
-        if (!success) {
-          console.error('Failed to delete avatar:', error);
-        }
-      }
-      return tag;
+      const result = await this.tagService.remove(uuid);
+      return res.status(HttpStatus.OK).json(result);
+    } catch (error) {
+      console.error('Error updating tag:', error.message);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to remove tag!',
+        detail: error.message,
+      });
     }
   }
 }

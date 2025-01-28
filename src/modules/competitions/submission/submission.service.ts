@@ -2,21 +2,21 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { CreateSubmissionDto } from '../dto/create-submission.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ContentStatus, ContentType } from '@prisma/client';
-import { ContentsService } from 'src/modules/contents/contents.service';
+import { ContentService } from 'src/modules/contents/contents.service';
 import { MailerService } from '@nestjs-modules/mailer';
-import { AudioPodcastsService } from 'src/modules/audio-podcasts/audio-podcasts.service';
-import { VideoPodcastsService } from 'src/modules/video-podcasts/video-podcasts.service';
+import { AudioPodcastService } from 'src/modules/audio-podcasts/audio-podcasts.service';
+import { VideoPodcastService } from 'src/modules/video-podcasts/video-podcasts.service';
 import { PrakerinService } from 'src/modules/prakerin/prakerin.service';
 
 @Injectable()
 export class SubmissionService {
   private readonly logger = new Logger(SubmissionService.name);
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly contentService: ContentsService,
+    private readonly prismaService: PrismaService,
+    private readonly contentService: ContentService,
     private readonly mailerService: MailerService,
-    private readonly audioPodcastService: AudioPodcastsService,
-    private readonly videoPodcastService: VideoPodcastsService,
+    private readonly audioPodcastService: AudioPodcastService,
+    private readonly videoPodcastService: VideoPodcastService,
     private readonly prakerinService: PrakerinService,
   ) {}
   async submitToCompetition(
@@ -25,62 +25,72 @@ export class SubmissionService {
   ) {
     const { competition_slug, type, audioData, videoData, prakerinData } =
       createSubmissionDto;
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const competition =
+        await this.prismaService.competition.findUniqueOrThrow({
+          where: { slug: competition_slug },
+        });
 
-    const competition = await this.prisma.competitions.findUniqueOrThrow({
-      where: { slug: competition_slug },
-    });
+      if (new Date() > competition.submission_deadline) {
+        throw new BadRequestException('Submission deadline has passed.');
+      }
 
-    if (new Date() > competition.submission_deadline) {
-      throw new BadRequestException('Submission deadline has passed.');
-    }
+      let content;
 
-    let content;
+      if (type === ContentType.Audio && audioData) {
+        content = await this.audioPodcastService.createAudioPodcast(
+          userUuid,
+          audioData,
+        );
+      }
+      if (type === ContentType.Video && videoData) {
+        content = await this.videoPodcastService.create(userUuid, videoData);
+      }
+      if (type === ContentType.Prakerin && prakerinData) {
+        content = await this.prakerinService.createPrakerin(
+          userUuid,
+          prakerinData,
+        );
+      }
 
-    if (type === ContentType.AUDIO && audioData) {
-      content = await this.audioPodcastService.create(audioData);
-    }
-    if (type === ContentType.VIDEO && videoData) {
-      content = await this.videoPodcastService.create(videoData);
-    }
-    if (type === ContentType.PRAKERIN && prakerinData) {
-      content = await this.prakerinService.create(prakerinData);
-    }
-
-    if (!content || competition.type !== content.data.type) {
-      throw new BadRequestException(
-        'Content category does not match competition category.',
-      );
-    }
-    const userData = await this.prisma.users.findUniqueOrThrow({
-      where: {
-        uuid: userUuid,
-      },
-      include: {
-        Students: {
-          select: {
-            uuid: true,
+      if (!content || competition.type !== content.data.type) {
+        throw new BadRequestException(
+          'Content category does not match competition category.',
+        );
+      }
+      const userData = await prisma.user.findUniqueOrThrow({
+        where: {
+          uuid: userUuid,
+        },
+        include: {
+          student: {
+            select: {
+              uuid: true,
+            },
           },
         },
-      },
+      });
+
+      const submit = await prisma.submission.create({
+        data: {
+          student: { connect: { uuid: userData.student.uuid } },
+          content: { connect: { uuid: content.data.uuid } },
+          competition: { connect: { slug: competition_slug } },
+        },
+      });
+
+      return {
+        status: 'success',
+        message: 'Successfully join the competition.',
+        data: submit,
+      };
     });
 
-    const submit = await this.prisma.submissions.create({
-      data: {
-        student: { connect: { uuid: userData.Students[0].uuid } },
-        content: { connect: { uuid: content.data.uuid } },
-        competition: { connect: { slug: competition_slug } },
-      },
-    });
-
-    return {
-      status: 'success',
-      message: 'Successfully join the competition.',
-      data: submit,
-    };
+    return res;
   }
 
   async approveSubmission(submissionUuid: string) {
-    const submission = await this.prisma.submissions.findUniqueOrThrow({
+    const submission = await this.prismaService.submission.findUniqueOrThrow({
       where: { uuid: submissionUuid },
       include: {
         content: true,
@@ -109,12 +119,12 @@ export class SubmissionService {
     );
     return this.contentService.updateContentStatus(
       submission.content.uuid,
-      ContentStatus.APPROVED,
+      ContentStatus.Approved,
     );
   }
 
   async rejectSubmission(submissionUuid: string) {
-    const submission = await this.prisma.submissions.findUniqueOrThrow({
+    const submission = await this.prismaService.submission.findUniqueOrThrow({
       where: { uuid: submissionUuid },
       include: {
         competition: true,
@@ -139,7 +149,7 @@ export class SubmissionService {
     this.logger.log(`Approved Submission sent to ${submission.student.name}`);
     return this.contentService.updateContentStatus(
       submission.content.uuid,
-      ContentStatus.REJECTED,
+      ContentStatus.Rejected,
     );
   }
 }

@@ -14,7 +14,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { CategoriesService } from './categories.service';
+import { CategoryService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Category } from './entities/category.entity';
@@ -30,63 +30,42 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SupabaseService } from 'src/supabase';
-import { ContentFileEnum } from '../contents/content-file.enum';
 import { Response } from 'express';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @ApiTags('Category')
 @ApiBearerAuth('JWT-auth')
-@Controller({ path: 'api/v1/categories', version: '1' })
-export class CategoriesController {
+@Controller({ path: 'categories', version: '1' })
+export class CategoryController {
   constructor(
-    private readonly categoriesService: CategoriesService,
-    private readonly supabaseService: SupabaseService,
+    private readonly categoriesService: CategoryService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Category })
   @ApiConsumes('multipart/form-data')
   async create(
-    @UploadedFile() avatar_url: Express.Multer.File,
+    @UploadedFile() avatar: Express.Multer.File,
     @Body() createCategoryDto: CreateCategoryDto,
     @Res() res: Response,
   ) {
-    let avatarFilename: string;
     try {
-      if (avatar_url && avatar_url.size > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            avatar_url,
-            `skilins_storage/${ContentFileEnum.avatar}`,
-          );
-
-        if (!success) {
-          throw new Error(`Failed to upload image: ${error}`);
-        }
-
-        avatarFilename = fileName;
-        createCategoryDto.avatar_url = url;
-      }
-      const result = await this.categoriesService.create(createCategoryDto);
+      const file = this.fileUploadService.handleFileUpload(avatar);
+      createCategoryDto.avatar = file.filePath;
+      const result =
+        await this.categoriesService.createCategory(createCategoryDto);
 
       return res.status(HttpStatus.CREATED).json(result);
     } catch (e) {
       console.error('Error during category creation:', e.message);
 
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.avatar}${avatarFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete files:', error);
-      }
-
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
-        message: 'Failed to create category and cleaned up uploaded files.',
+        message: 'Failed to create category.',
         detail: e.message,
       });
     }
@@ -101,50 +80,38 @@ export class CategoriesController {
   })
   @HttpCode(HttpStatus.OK)
   findAll(@Query('search') search: string) {
-    return this.categoriesService.findAll(search);
+    return this.categoriesService.findAllCategory(search);
   }
 
   @Get(':name')
   @ApiOkResponse({ type: Category })
   @HttpCode(HttpStatus.OK)
   findOne(@Param('name') name: string) {
-    return this.categoriesService.findOne(name);
+    return this.categoriesService.findCategoryByName(name);
   }
 
   @Patch(':name')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('admin')
-  @UseInterceptors(FileInterceptor('avatar_url'))
+  @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Category })
   @ApiConsumes('multipart/form-data')
   async update(
     @Param('name') name: string,
-    @UploadedFile() avatar_url: Express.Multer.File,
+    @UploadedFile() avatar: Express.Multer.File,
     @Body() updateCategoryDto: UpdateCategoryDto,
     @Res() res: Response,
   ) {
     try {
-      const isExist = await this.categoriesService.findOne(name);
+      const isExist = await this.categoriesService.findCategoryByName(name);
 
-      if (!isExist) {
-        return res.status(HttpStatus.NOT_FOUND).json({
-          status: 'failed',
-          message: 'Category not found',
-        });
-      }
+      const file = this.fileUploadService.updateFile(
+        isExist.data.avatar,
+        avatar,
+      );
+      updateCategoryDto.avatar = file.filePath;
 
-      if (avatar_url && avatar_url.size > 0) {
-        const avatarFilename = isExist.data.avatar_url.split('/').pop();
-        const { success, error } = await this.supabaseService.updateFile(
-          `${ContentFileEnum.avatar}${avatarFilename}`,
-          avatar_url,
-        );
-        if (!success) {
-          throw new Error(`Failed to update avatar: ${error}`);
-        }
-      }
-
-      const updatedCategory = await this.categoriesService.update(
+      const updatedCategory = await this.categoriesService.updateCategoryByName(
         name,
         updateCategoryDto,
       );
@@ -166,29 +133,10 @@ export class CategoriesController {
   @ApiOkResponse({ type: Category })
   async remove(@Param('name') name: string, @Res() res: Response) {
     try {
-      const isExist = await this.categoriesService.findOne(name);
+      const isExist = await this.categoriesService.findCategoryByName(name);
+      this.fileUploadService.deleteFile(isExist.data.avatar);
 
-      if (!isExist) {
-        return res.status(HttpStatus.NOT_FOUND).json({
-          status: 'failed',
-          message: 'Category not found',
-        });
-      }
-
-      const thumbFilename = isExist.data.avatar_url
-        .split('/')
-        .pop()
-        .replace(/%20/g, ' ');
-
-      const { success, error } = await this.supabaseService.deleteFile([
-        `${ContentFileEnum.avatar}${thumbFilename}`,
-      ]);
-
-      if (!success) {
-        console.error('Failed to delete avatar:', error);
-      }
-
-      const category = await this.categoriesService.remove(name);
+      const category = await this.categoriesService.removeCategoryByName(name);
 
       return res.status(HttpStatus.OK).json(category);
     } catch (error) {

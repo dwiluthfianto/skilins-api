@@ -12,7 +12,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { StudentsService } from './students.service';
+import { StudentService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import {
@@ -31,10 +31,10 @@ import { Response } from 'express';
 
 @ApiTags('Student')
 @ApiBasicAuth('JWT-auth')
-@Controller({ path: 'api/v1/students', version: '1' })
+@Controller({ path: 'students', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-export class StudentsController {
-  constructor(private readonly studentsService: StudentsService) {}
+export class StudentController {
+  constructor(private readonly studentService: StudentService) {}
 
   @Post()
   @ApiCreatedResponse({
@@ -47,8 +47,8 @@ export class StudentsController {
     @Res() res: Response,
   ) {
     try {
-      const result = await this.studentsService.create(createStudentDto);
-      return res.status(HttpStatus.OK).json(result);
+      const result = await this.studentService.create(createStudentDto);
+      return res.status(HttpStatus.CREATED).json(result);
     } catch (error) {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'failed',
@@ -66,7 +66,7 @@ export class StudentsController {
   @HttpCode(HttpStatus.OK)
   @Roles('Staff')
   findAll(@Query() query: FindStudentDto) {
-    return this.studentsService.findAll(query);
+    return this.studentService.findAllStudent(query);
   }
 
   @Get(':uuid')
@@ -76,7 +76,7 @@ export class StudentsController {
   @HttpCode(HttpStatus.OK)
   @Roles('Staff', 'Student')
   findOne(@Param('uuid') uuid: string) {
-    return this.studentsService.findOne(uuid);
+    return this.studentService.findOne(uuid);
   }
 
   @Patch(':uuid')
@@ -91,7 +91,7 @@ export class StudentsController {
     @Res() res: Response,
   ) {
     try {
-      const result = await this.studentsService.update(uuid, updateStudentDto);
+      const result = await this.studentService.update(uuid, updateStudentDto);
       return res.status(HttpStatus.OK).json(result);
     } catch (error) {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
@@ -109,7 +109,7 @@ export class StudentsController {
   @HttpCode(HttpStatus.OK)
   @Roles('Staff')
   async verifyStudent(@Param('uuid') uuid: string) {
-    return await this.studentsService.verifiedStudent(uuid);
+    return await this.studentService.verifiedStudent(uuid);
   }
 
   @Delete(':uuid')
@@ -119,6 +119,6 @@ export class StudentsController {
   @HttpCode(HttpStatus.OK)
   @Roles('Staff')
   async remove(@Param('uuid') uuid: string) {
-    return await this.studentsService.remove(uuid);
+    return await this.studentService.remove(uuid);
   }
 }

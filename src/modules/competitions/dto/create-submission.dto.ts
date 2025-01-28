@@ -12,20 +12,20 @@ export class CreateSubmissionDto {
   @IsString()
   competition_slug: string;
 
-  @ApiProperty({ example: 'AudioPodcast', enum: ContentType })
+  @ApiProperty({ example: 'Audio', enum: ContentType })
   @IsNotEmpty()
   @IsEnum(ContentType)
   type: ContentType;
 
-  @ValidateIf((o) => o.type === ContentType.AUDIO)
+  @ValidateIf((o) => o.type === ContentType.Audio)
   @Type(() => CreateAudioPodcastDto)
   audioData?: CreateAudioPodcastDto;
 
-  @ValidateIf((o) => o.type === ContentType.VIDEO)
+  @ValidateIf((o) => o.type === ContentType.Video)
   @Type(() => CreateVideoPodcastDto)
   videoData?: CreateVideoPodcastDto;
 
-  @ValidateIf((o) => o.type === ContentType.PRAKERIN)
+  @ValidateIf((o) => o.type === ContentType.Prakerin)
   @Type(() => CreatePrakerinDto)
   prakerinData?: CreatePrakerinDto;
 }

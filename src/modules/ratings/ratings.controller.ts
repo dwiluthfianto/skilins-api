@@ -7,20 +7,21 @@ import {
   Req,
   Get,
 } from '@nestjs/common';
-import { RatingsService } from './ratings.service';
+import { RatingService } from './ratings.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { Request } from 'express';
 
 @ApiTags('Rating & Comment')
-@Controller({ path: 'api/v1/ratings', version: '1' })
+@Controller({ path: 'ratings', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
+@ApiBasicAuth('JWT-auth')
 @Roles('User', 'Staff', 'Student', 'Judge')
-export class RatingsController {
-  constructor(private readonly ratingsService: RatingsService) {}
+export class RatingController {
+  constructor(private readonly ratingService: RatingService) {}
 
   @Post(':contentUuid')
   create(
@@ -29,7 +30,7 @@ export class RatingsController {
     @Body() createRatingDto: CreateRatingDto,
   ) {
     const user = req.user;
-    return this.ratingsService.ratingContent(
+    return this.ratingService.ratingContent(
       user['sub'],
       contentUuid,
       createRatingDto,
@@ -42,6 +43,6 @@ export class RatingsController {
     @Req() req: Request,
   ) {
     const user = req.user;
-    return this.ratingsService.getUserRating(contentUuid, user['sub']);
+    return this.ratingService.getUserRating(contentUuid, user['sub']);
   }
 }

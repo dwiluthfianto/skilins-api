@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { UsersController } from './users.controller';
+import { UserService } from './users.service';
+import { UserController } from './users.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { SupabaseService } from 'src/supabase';
+
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [UsersController],
-  providers: [UsersService, SupabaseService],
-  exports: [UsersService], // Export UsersService to be used in AuthModule and other modules
+  controllers: [UserController],
+  providers: [UserService, FileUploadService],
+  exports: [UserService], // Export UserService to be used in AuthModule and other modules
 })
-export class UsersModule {}
+export class UserModule {}

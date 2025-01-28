@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
-export class RatingsService {
-  constructor(private readonly prisma: PrismaService) {}
+export class RatingService {
+  constructor(private readonly prismaService: PrismaService) {}
   async ratingContent(
     userUuid: string,
     contentUuid: string,
@@ -14,63 +14,72 @@ export class RatingsService {
       throw new Error('Rating value must be between 1 and 5.');
     }
 
-    const user = await this.prisma.users.findUniqueOrThrow({
-      where: { uuid: userUuid },
-      select: {
-        id: true,
-      },
-    });
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { uuid: userUuid },
+        select: {
+          id: true,
+        },
+      });
 
-    const content = await this.prisma.contents.findUniqueOrThrow({
-      where: { uuid: contentUuid },
-      select: {
-        id: true,
-      },
-    });
+      if (!user) {
+        throw new NotFoundException('User is not found!');
+      }
 
-    const rating = await this.prisma.ratings.upsert({
-      where: {
-        ratingContent: {
+      const content = await prisma.content.findUniqueOrThrow({
+        where: { uuid: contentUuid },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!content) {
+        throw new NotFoundException('Content is not found!');
+      }
+
+      await prisma.rating.upsert({
+        where: {
+          rating_content: {
+            content_id: content.id,
+            rating_by: user.id,
+          },
+        },
+        update: {
+          rating_value: createRatingDto.rating_value,
+        },
+        create: {
           content_id: content.id,
           rating_by: user.id,
+          rating_value: createRatingDto.rating_value,
         },
-      },
-      update: {
-        rating_value: createRatingDto.rating_value,
-      },
-      create: {
-        content_id: content.id,
-        rating_by: user.id,
-        rating_value: createRatingDto.rating_value,
-      },
+      });
+
+      return {
+        status: 'success',
+        message: 'Successfully give a rating',
+      };
     });
 
-    return {
-      status: 'success',
-      message: 'Successfully give a rating',
-      data: {
-        uuid: rating.uuid,
-      },
-    };
+    return res;
   }
 
   async getUserRating(contentUuid: string, userUuid: string) {
-    const user = await this.prisma.users.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid: userUuid },
       select: {
         id: true,
       },
     });
 
-    const content = await this.prisma.contents.findUniqueOrThrow({
+    const content = await this.prismaService.content.findUniqueOrThrow({
       where: { uuid: contentUuid },
       select: {
         id: true,
       },
     });
-    return this.prisma.ratings.findUnique({
+    return this.prismaService.rating.findUnique({
       where: {
-        ratingContent: { content_id: content.id, rating_by: user.id },
+        rating_content: { content_id: content.id, rating_by: user.id },
       },
     });
   }

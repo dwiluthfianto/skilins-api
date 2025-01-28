@@ -10,56 +10,73 @@ import { subMonths } from 'date-fns';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
 
 @Injectable()
-export class BlogsService {
+export class BlogService {
   constructor(
-    private prisma: PrismaService,
+    private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
 
-  async create(authorUuid: string, createBlogDto: CreateBlogDto) {
+  async createBlog(creatorUuid: string, createBlogDto: CreateBlogDto) {
     const { title, thumbnail, description, tags, category_name } =
       createBlogDto;
 
-    const parsedTags = parseArrayInput(tags);
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const parsedTags = parseArrayInput(tags);
 
-    const newSlug = await this.slugHelper.generateUniqueSlug(title);
-    const content = await this.prisma.contents.create({
-      data: {
-        type: 'BLOG',
-        title,
-        thumbnail,
-        description,
-        status: ContentStatus.APPROVED,
-        Tags: {
-          connect: parsedTags?.map((tag) => ({
-            name: tag.text,
-          })),
+      const newSlug = await this.slugHelper.generateUniqueSlug(title);
+      const userData = await prisma.user.findUnique({
+        where: {
+          uuid: creatorUuid,
         },
-        slug: newSlug,
-        category: {
-          connect: {
-            name: category_name,
+      });
+
+      if (!userData) {
+        throw new NotFoundException(
+          'User not found, please make sure you input correct user',
+        );
+      }
+      await prisma.content.create({
+        data: {
+          type: 'Blog',
+          title,
+          thumbnail,
+          description,
+          status: ContentStatus.Approved,
+          tag: {
+            connectOrCreate: parsedTags?.map((tag) => ({
+              where: {
+                name: tag.text,
+              },
+              create: {
+                name: tag.text,
+              },
+            })),
+          },
+          slug: newSlug,
+          category: {
+            connect: {
+              name: category_name,
+            },
+          },
+          blog: {
+            create: {
+              creator: { connect: { uuid: creatorUuid } },
+            },
           },
         },
-        Blogs: {
-          create: {
-            author: { connect: { uuid: authorUuid } },
-          },
-        },
-      },
+      });
+
+      return {
+        status: 'success',
+        message: 'Blog successfully uploaded!',
+      };
     });
 
-    return {
-      status: 'success',
-      message: 'Blog succefully added',
-      data: {
-        id: content.uuid,
-      },
-    };
+    return res;
   }
 
-  async fetchBlogs(findBlogQueryDto: FindBlogQueryDto) {
+  async findAllBlog(findBlogQueryDto: FindBlogQueryDto) {
     const { page, limit, tag, search, status, latest } = findBlogQueryDto;
 
     const currentDate = new Date();
@@ -68,7 +85,7 @@ export class BlogsService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.APPROVED,
+          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -93,7 +110,7 @@ export class BlogsService {
 
     const tagFilter = tag
       ? {
-          Tags: {
+          tag: {
             some: {
               name: {
                 equals: tag,
@@ -111,31 +128,24 @@ export class BlogsService {
       ...tagFilter,
     };
 
-    const blogs = await this.prisma.contents.findMany({
+    const blogs = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'BLOG',
+        type: 'Blog',
         ...filter,
       },
       include: {
-        category: true,
-        Tags: true,
-        Ratings: true,
-        Blogs: {
-          include: {
-            author: true,
-          },
-        },
+        rating: true,
       },
     });
 
-    const total = await this.prisma.contents.count({
-      where: { type: 'BLOG', ...filter },
+    const total = await this.prismaService.content.count({
+      where: { type: 'Blog', ...filter },
     });
 
     const data = await Promise.all(
       blogs.map(async (blog) => {
-        const avgRatingResult = await this.prisma.ratings.aggregate({
+        const avgRatingResult = await this.prismaService.rating.aggregate({
           where: { content_id: blog.id },
           _avg: {
             rating_value: true,
@@ -144,18 +154,7 @@ export class BlogsService {
         const avg_rating = avgRatingResult._avg.rating_value || 0;
 
         return {
-          uuid: blog.uuid,
-          thumbnail: blog.thumbnail,
-          title: blog.title,
-          description: blog.description,
-          slug: blog.slug,
-          tags: blog.Tags.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          updated_at: blog.updated_at,
-          category: blog.category.name,
-          author: blog.Blogs[0].author.full_name,
+          ...blog,
           avg_rating,
         };
       }),
@@ -164,39 +163,66 @@ export class BlogsService {
     return {
       status: 'success',
       data,
-      totalPages: total,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
-  async findOneByUuid(uuid: string) {
-    const content = await this.prisma.contents.findUniqueOrThrow({
-      where: { type: 'BLOG', uuid },
+  async findBlogByUuid(contentUuid: string) {
+    const content = await this.prismaService.content.findUniqueOrThrow({
+      where: { type: 'Blog', uuid: contentUuid },
       include: {
-        category: true,
-        Tags: true,
-        Genres: true,
-        Comments: {
+        blog: {
           include: {
-            user: {
-              select: {
-                uuid: true,
-                full_name: true,
-                profile_url: true,
-              },
-            },
-          },
-        },
-        Blogs: {
-          include: {
-            author: true,
+            creator: true,
           },
         },
       },
     });
 
-    const avg_rating = await this.prisma.ratings.aggregate({
+    if (!content) {
+      throw new NotFoundException(
+        'Blog not found, please make sure you input correct blog',
+      );
+    }
+
+    return {
+      status: 'success',
+      data: content,
+    };
+  }
+
+  async findBlogBySlug(slug: string) {
+    const content = await this.prismaService.content.findUniqueOrThrow({
+      where: { type: 'Blog', slug },
+      include: {
+        tag: true,
+        category: true,
+        comment: {
+          include: {
+            user: {
+              select: {
+                uuid: true,
+                full_name: true,
+                profile: true,
+              },
+            },
+          },
+        },
+        rating: true,
+        blog: {
+          include: {
+            creator: true,
+          },
+        },
+      },
+    });
+
+    const avg_rating = await this.prismaService.rating.aggregate({
       where: { content_id: content.id },
       _avg: {
         rating_value: true,
@@ -206,170 +232,97 @@ export class BlogsService {
     return {
       status: 'success',
       data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        tags: content.Tags.map((tag) => ({
+        ...content,
+        tags: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        updated_at: content.updated_at,
-        category: content.category.name,
-        author: content.Blogs[0].author.full_name,
-        genres: content.Genres.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
+        creator: content.blog.creator.full_name,
+        ratings: content.rating.map((rating) => ({
+          ...rating,
         })),
-        comments: content.Comments.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
+        comments: content.comment.map((comment) => ({
+          ...comment,
           commented_by_uuid: comment.user.uuid,
           commented_by: comment.user.full_name,
-          profile: comment.user.profile_url,
-        })),
-        avg_rating,
-      },
-    };
-  }
-  async findOneBySlug(slug: string) {
-    const content = await this.prisma.contents.findUniqueOrThrow({
-      where: { type: 'BLOG', slug },
-      include: {
-        Tags: true,
-        category: true,
-        Genres: true,
-        Comments: {
-          include: {
-            user: {
-              select: {
-                uuid: true,
-                full_name: true,
-                profile_url: true,
-              },
-            },
-          },
-        },
-        Blogs: {
-          include: {
-            author: true,
-          },
-        },
-      },
-    });
-
-    const avg_rating = await this.prisma.ratings.aggregate({
-      where: { content_id: content.id },
-      _avg: {
-        rating_value: true,
-      },
-    });
-
-    return {
-      status: 'success',
-      data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        tags: content.Tags.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        updated_at: content.updated_at,
-        category: content.category.name,
-        author: content.Blogs[0].author.full_name,
-        genres: content.Genres.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comments: content.Comments.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile_url,
+          profile: comment.user.profile,
         })),
         avg_rating,
       },
     };
   }
 
-  async update(
-    authorUuid: string,
+  async updateBlogByUuid(
+    creatorUuid: string,
     contentUuid: string,
     updateBlogDto: UpdateBlogDto,
   ) {
     const { title, thumbnail, description, tags, category_name } =
       updateBlogDto;
 
-    const content = await this.uuidHelper.validateUuidContent(contentUuid);
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const content = await this.uuidHelper.validateUuidContent(contentUuid);
 
-    const parsedTags = parseArrayInput(tags);
-    const newSlug = await this.slugHelper.generateUniqueSlug(title);
+      const parsedTags = parseArrayInput(tags);
+      const newSlug = await this.slugHelper.generateUniqueSlug(title);
 
-    const blog = await this.prisma.contents.update({
-      where: {
-        uuid: content.uuid,
-        type: 'BLOG',
-      },
-      data: {
-        title,
-        thumbnail,
-        description,
-        Tags: {
-          connect: parsedTags?.map((tag) => ({
-            name: tag.text,
-          })),
+      await prisma.content.update({
+        where: {
+          uuid: content.uuid,
+          type: 'Blog',
         },
-        slug: newSlug,
-        category: {
-          connect: {
-            name: category_name,
+        data: {
+          title,
+          thumbnail,
+          description,
+          tag: {
+            connectOrCreate: parsedTags?.map((tag) => ({
+              where: {
+                name: tag.text,
+              },
+              create: {
+                name: tag.text,
+              },
+            })),
           },
-        },
-        Blogs: {
-          update: {
-            where: { content_id: content.id },
-            data: {
-              author: { connect: { uuid: authorUuid } },
+          slug: newSlug,
+          category: {
+            connect: {
+              name: category_name,
+            },
+          },
+          blog: {
+            update: {
+              where: { content_id: content.id },
+              data: {
+                creator: { connect: { uuid: creatorUuid } },
+              },
             },
           },
         },
-      },
-    });
+      });
 
-    return {
-      status: 'success',
-      message: 'Blog updated successfully',
-      data: {
-        id: blog.uuid,
-      },
-    };
+      return {
+        status: 'success',
+        message: 'Blog updated successfully',
+      };
+    });
+    return res;
   }
 
-  async remove(uuid: string) {
-    const isExists = await this.prisma.contents.findUnique({
-      where: { uuid },
+  async removeBlogByUuid(contentUuid: string) {
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await this.uuidHelper.validateUuidContent(contentUuid);
+
+      await prisma.content.delete({
+        where: { uuid: contentUuid },
+      });
+      return {
+        status: 'success',
+        message: 'Audio successfully deleted!',
+      };
     });
 
-    if (!isExists) {
-      throw new NotFoundException(`Audio with UUID ${uuid} does not exist`);
-    }
-
-    const content = await this.prisma.contents.delete({
-      where: { uuid: uuid, type: 'BLOG' },
-    });
-    return {
-      status: 'success',
-      message: 'Blog succefully deleted',
-      data: { uuid: content.uuid },
-    };
+    return res;
   }
 }

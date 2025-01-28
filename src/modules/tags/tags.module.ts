@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { TagsService } from './tags.service';
-import { TagsController } from './tags.controller';
+import { TagService } from './tags.service';
+import { TagController } from './tags.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
-import { SupabaseService } from 'src/supabase';
+
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
-  controllers: [TagsController],
-  providers: [TagsService, SupabaseService, UuidHelper],
+  controllers: [TagController],
+  providers: [TagService, UuidHelper, FileUploadService],
   imports: [PrismaModule],
 })
-export class TagsModule {}
+export class TagModule {}

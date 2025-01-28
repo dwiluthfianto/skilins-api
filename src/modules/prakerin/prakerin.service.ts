@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CreatePrakerinDto } from './dto/create-prakerin.dto';
 import { UpdatePrakerinDto } from './dto/update-prakerin.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -11,46 +15,57 @@ import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
 @Injectable()
 export class PrakerinService {
   constructor(
-    private prisma: PrismaService,
+    private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
-  async create(createPrakerinDto: CreatePrakerinDto) {
-    const { title, thumbnail, description, pages, file_url, author_uuid } =
-      createPrakerinDto;
+  async createPrakerin(
+    creatorUuid: string,
+    createPrakerinDto: CreatePrakerinDto,
+  ) {
+    const { title, thumbnail, description, pages, file } = createPrakerinDto;
 
-    const res = await this.prisma.$transaction(async (p) => {
+    const res = await this.prismaService.$transaction(async (prisma) => {
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
-      const userData = await p.users.findUniqueOrThrow({
+      const userData = await prisma.user.findUniqueOrThrow({
         where: {
-          uuid: author_uuid,
+          uuid: creatorUuid,
         },
         include: {
-          Students: {
+          student: {
             select: {
-              uuid: true,
+              id: true,
             },
           },
         },
       });
 
       if (!userData) {
-        throw new NotFoundException('user not found!');
+        throw new NotFoundException(
+          'User not found, please make sure you input correct user',
+        );
       }
 
-      const content = await p.contents.create({
+      const fileAttachment = await prisma.fileAttachment.create({
         data: {
-          type: 'PRAKERIN',
+          file: file,
+          type: 'Ebook',
+        },
+      });
+
+      await prisma.content.create({
+        data: {
+          type: 'Prakerin',
           title,
           thumbnail,
           description,
           slug: newSlug,
           category: { connect: { name: 'Non-fiction' } },
-          Prakerin: {
+          prakerin: {
             create: {
-              author: { connect: { uuid: userData.Students[0].uuid } },
+              creator_id: userData.student.id,
               pages,
-              file_url,
+              file_id: fileAttachment.id,
             },
           },
         },
@@ -58,18 +73,14 @@ export class PrakerinService {
 
       return {
         status: 'success',
-        message: 'prakerin added successfully!',
-        data: {
-          uuid: content.uuid,
-          type: content.type,
-        },
+        message: 'Prakerin successfully added!',
       };
     });
 
     return res;
   }
 
-  async fetchPrakerin(findPrakerinQueryDto: FindPrakerinQueryDto) {
+  async findAllPrakerin(findPrakerinQueryDto: FindPrakerinQueryDto) {
     const { page, limit, search, status, latest } = findPrakerinQueryDto;
 
     const currentDate = new Date();
@@ -78,7 +89,7 @@ export class PrakerinService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.APPROVED,
+          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -107,19 +118,18 @@ export class PrakerinService {
       ...statusFilter,
     };
 
-    const prakerin = await this.prisma.contents.findMany({
+    const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'PRAKERIN',
+        type: 'Prakerin',
         ...filter,
       },
       include: {
-        category: true,
-        Tags: true,
-        Ratings: true,
-        Prakerin: {
+        rating: true,
+        prakerin: {
           include: {
-            author: {
+            file_attachment: true,
+            creator: {
               include: {
                 major: true,
               },
@@ -129,13 +139,13 @@ export class PrakerinService {
       },
     });
 
-    const total = await this.prisma.contents.count({
-      where: { type: 'PRAKERIN', ...filter },
+    const total = await this.prismaService.content.count({
+      where: { type: 'Prakerin', ...filter },
     });
 
     const data = await Promise.all(
       prakerin.map(async (content) => {
-        const avgRatingResult = await this.prisma.ratings.aggregate({
+        const avgRatingResult = await this.prismaService.rating.aggregate({
           where: { content_id: content.id },
           _avg: {
             rating_value: true,
@@ -143,23 +153,11 @@ export class PrakerinService {
         });
         const avg_rating = avgRatingResult._avg.rating_value || 0;
         return {
-          uuid: content.uuid,
-          thumbnail: content.thumbnail,
-          title: content.title,
-          description: content.description,
-          slug: content.slug,
-          tags: content.Tags.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          status: content.status,
-          created_at: content.created_at,
-          updated_at: content.updated_at,
-          category: content.category.name,
-          author: content.Prakerin[0].author.name,
-          major: content.Prakerin[0].author.major.name,
-          pages: content.Prakerin[0].pages,
-          file_url: content.Prakerin[0].file_url,
+          ...content,
+          author: content.prakerin.creator.name,
+          major: content.prakerin.creator.major.name,
+          pages: content.prakerin.pages,
+          file_attachment: content.prakerin.file_attachment.file,
           avg_rating,
         };
       }),
@@ -168,9 +166,12 @@ export class PrakerinService {
     return {
       status: 'success',
       data,
-      totalPages: total,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
@@ -180,12 +181,14 @@ export class PrakerinService {
   ) {
     const { page, limit, search, status, latest } = findPrakerinQueryDto;
 
-    const user = await this.prisma.users.findUnique({
+    const user = await this.prismaService.user.findUnique({
       where: { uuid: userUuid },
     });
 
     if (!user) {
-      throw new NotFoundException(404, 'Your account has been deleted');
+      throw new NotFoundException(
+        'User not found, please make sure you input correct user',
+      );
     }
 
     const currentDate = new Date();
@@ -193,18 +196,16 @@ export class PrakerinService {
     const twoMonthsAgo = subMonths(currentDate, 2);
 
     const filterByUser = {
-      Prakerin: {
-        some: {
-          author: {
-            user: { uuid: userUuid },
-          },
+      prakerin: {
+        creator: {
+          user: { uuid: userUuid },
         },
       },
     };
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.APPROVED,
+          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -234,20 +235,20 @@ export class PrakerinService {
       ...statusFilter,
     };
 
-    const prakerin = await this.prisma.contents.findMany({
+    const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'PRAKERIN',
-
+        type: 'Prakerin',
         ...filter,
       },
       include: {
         category: true,
-        Tags: true,
-        Ratings: true,
-        Prakerin: {
+        tag: true,
+        rating: true,
+        prakerin: {
           include: {
-            author: {
+            file_attachment: true,
+            creator: {
               include: {
                 major: true,
               },
@@ -257,10 +258,10 @@ export class PrakerinService {
       },
     });
 
-    const total = await this.prisma.prakerin.count();
+    const total = await this.prismaService.prakerin.count();
     const data = await Promise.all(
       prakerin.map(async (content) => {
-        const avgRatingResult = await this.prisma.ratings.aggregate({
+        const avgRatingResult = await this.prismaService.rating.aggregate({
           where: { content_id: content.id },
           _avg: {
             rating_value: true,
@@ -268,23 +269,16 @@ export class PrakerinService {
         });
         const avg_rating = avgRatingResult._avg.rating_value || 0;
         return {
-          uuid: content.uuid,
-          thumbnail: content.thumbnail,
-          title: content.title,
-          description: content.description,
-          slug: content.slug,
-          tags: content.Tags.map((tag) => ({
+          ...content,
+          tags: content.tag.map((tag) => ({
             id: tag.uuid,
             text: tag.name,
           })),
-          status: content.status,
-          created_at: content.created_at,
-          updated_at: content.updated_at,
           category: content.category.name,
-          author: content.Prakerin[0].author.name,
-          major: content.Prakerin[0].author.major.name,
-          pages: content.Prakerin[0].pages,
-          file_url: content.Prakerin[0].file_url,
+          author: content.prakerin.creator.name,
+          major: content.prakerin.creator.major.name,
+          pages: content.prakerin.pages,
+          file_attachment: content.prakerin.file_attachment.file,
           avg_rating,
         };
       }),
@@ -293,25 +287,62 @@ export class PrakerinService {
     return {
       status: 'success',
       data,
-      totalPages: limit ? Math.ceil(total / limit) : 1,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
-  async findOne(uuid: string) {
-    await this.uuidHelper.validateUuidContent(uuid);
-    const content = await this.prisma.contents.findUniqueOrThrow({
-      where: { uuid, type: 'PRAKERIN' },
+  async findPrakerinByUuid(contentUuid: string) {
+    const content = await this.prismaService.content.findUniqueOrThrow({
+      where: { uuid: contentUuid, type: 'Prakerin' },
+      include: {
+        prakerin: {
+          include: {
+            file_attachment: true,
+          },
+        },
+      },
+    });
+
+    if (!content) {
+      throw new NotFoundException(
+        'Content not found, please make sure you input correct content',
+      );
+    }
+
+    return {
+      status: 'success',
+      data: content,
+    };
+  }
+
+  async findPrakerinBySlug(slug: string) {
+    const content = await this.prismaService.content.findUniqueOrThrow({
+      where: { slug, type: 'Prakerin' },
       include: {
         category: true,
-        Genres: true,
-        Ratings: true,
-        Tags: true,
-        Comments: true,
-        Prakerin: {
+        genre: true,
+        rating: true,
+        tag: true,
+        comment: {
           include: {
-            author: {
+            user: {
+              select: {
+                uuid: true,
+                full_name: true,
+                profile: true,
+              },
+            },
+          },
+        },
+        prakerin: {
+          include: {
+            file_attachment: true,
+            creator: {
               include: {
                 major: true,
               },
@@ -321,7 +352,7 @@ export class PrakerinService {
       },
     });
 
-    const avg_rating = await this.prisma.ratings.aggregate({
+    const avg_rating = await this.prismaService.rating.aggregate({
       where: { content_id: content.id },
       _avg: {
         rating_value: true,
@@ -331,127 +362,95 @@ export class PrakerinService {
     return {
       status: 'success',
       data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        tags: content.Tags.map((tag) => ({
+        ...content,
+        tags: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        created_at: content.created_at,
-        updated_at: content.updated_at,
         category: content.category.name,
-        author: content.Prakerin[0].author.name,
-        major: content.Prakerin[0].author.major.name,
-        pages: content.Prakerin[0].pages,
-        file_url: content.Prakerin[0].file_url,
-        genres: content.Genres?.map((genre) => ({
+        author: content.prakerin.creator.name,
+        major: content.prakerin.creator.major.name,
+        pages: content.prakerin.pages,
+        file_attachment: content.prakerin.file_attachment.file,
+        genres: content.genre?.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),
-        comments: content.Comments?.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          commented_by: comment.commented_by,
+        comments: content.comment.map((comment) => ({
+          ...comment,
+          commented_by_uuid: comment.user.uuid,
+          commented_by: comment.user.full_name,
+          profile: comment.user.profile,
         })),
         avg_rating,
       },
     };
   }
 
-  async findOneBySlug(slug: string) {
-    const content = await this.prisma.contents.findUniqueOrThrow({
-      where: { slug, type: 'PRAKERIN' },
-      include: {
-        category: true,
-        Genres: true,
-        Ratings: true,
-        Tags: true,
-        Comments: true,
-        Prakerin: {
-          include: {
-            author: {
-              include: {
-                major: true,
-              },
+  async updatePrakerinByUuid(
+    contentUuid: string,
+    creatorUuid: string,
+    updatePrakerinDto: UpdatePrakerinDto,
+  ) {
+    const { title, thumbnail, description, pages, file } = updatePrakerinDto;
+
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const content = await prisma.content.findUnique({
+        where: {
+          uuid: contentUuid,
+        },
+        select: {
+          id: true,
+          uuid: true,
+          prakerin: {
+            select: {
+              uuid: true,
+              file_id: true,
+              creator_id: true,
             },
           },
         },
-      },
-    });
+      });
 
-    const avg_rating = await this.prisma.ratings.aggregate({
-      where: { content_id: content.id },
-      _avg: {
-        rating_value: true,
-      },
-    });
+      if (!content) {
+        throw new NotFoundException(
+          'Content not found, please make sure you input correct content',
+        );
+      }
+      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
 
-    return {
-      status: 'success',
-      data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        tags: content.Tags.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        created_at: content.created_at,
-        updated_at: content.updated_at,
-        category: content.category.name,
-        author: content.Prakerin[0].author.name,
-        major: content.Prakerin[0].author.major.name,
-        pages: content.Prakerin[0].pages,
-        file_url: content.Prakerin[0].file_url,
-        genres: content.Genres?.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comments: content.Comments?.map((comment) => ({
-          uuid: comment.uuid,
-          subject: comment.comment_content,
-          created_at: comment.created_at,
-          updated_at: comment.updated_at,
-          commented_by: comment.commented_by,
-        })),
-        avg_rating,
-      },
-    };
-  }
-
-  async update(contentUuid: string, updatePrakerinDto: UpdatePrakerinDto) {
-    const { title, thumbnail, description, pages, file_url, author_uuid } =
-      updatePrakerinDto;
-
-    const res = await this.prisma.$transaction(async (p) => {
-      const contentCheck =
-        await this.uuidHelper.validateUuidContent(contentUuid);
-      const creator = await this.uuidHelper.validateUuidCreator(author_uuid);
+      if (creator.student.id !== content.prakerin.creator_id) {
+        throw new UnauthorizedException(
+          `You don't have any permission to update this prakerin`,
+        );
+      }
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
-      const content = await p.contents.update({
-        where: { uuid: contentUuid, type: 'PRAKERIN' },
+
+      await prisma.fileAttachment.update({
+        where: {
+          id: content.prakerin.file_id,
+        },
+        data: {
+          file: file,
+          type: 'Prakerin',
+        },
+      });
+
+      await prisma.content.update({
+        where: { uuid: contentUuid, type: 'Prakerin' },
         data: {
           title,
           thumbnail,
           description,
           slug: newSlug,
-          Prakerin: {
+          prakerin: {
             update: {
               where: {
-                content_id: contentCheck.id,
+                content_id: content.id,
               },
               data: {
-                author_id: creator.Students[0].id,
                 pages,
-                file_url,
               },
             },
           },
@@ -461,27 +460,25 @@ export class PrakerinService {
       return {
         status: 'success',
         message: 'prakerin updated successfully!',
-        data: {
-          uuid: content.uuid,
-        },
       };
     });
 
     return res;
   }
 
-  async remove(uuid: string) {
-    await this.uuidHelper.validateUuidContent(uuid);
+  async removePrakerinByUuid(contentUuid: string) {
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await this.uuidHelper.validateUuidContent(contentUuid);
 
-    const prakerin = await this.prisma.contents.delete({
-      where: { uuid: uuid },
+      await prisma.content.delete({
+        where: { uuid: contentUuid },
+      });
+      return {
+        status: 'success',
+        message: 'Prakerin successfully deleted!',
+      };
     });
-    return {
-      status: 'success',
-      message: 'prakerin successfully deleted!',
-      data: {
-        uuid: prakerin.uuid,
-      },
-    };
+
+    return res;
   }
 }

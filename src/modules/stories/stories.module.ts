@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { StoriesService } from './stories.service';
-import { StoriesController } from './stories.controller';
+import { StoryService } from './stories.service';
+import { StoryController } from './stories.controller';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import { SupabaseService } from 'src/supabase';
+
 import { PrismaModule } from 'src/prisma/prisma.module';
+import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
-  controllers: [StoriesController],
-  providers: [StoriesService, UuidHelper, SlugHelper, SupabaseService],
+  controllers: [StoryController],
+  providers: [StoryService, UuidHelper, SlugHelper, FileUploadService],
   imports: [PrismaModule],
 })
-export class StoriesModule {}
+export class StoryModule {}

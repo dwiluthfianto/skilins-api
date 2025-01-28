@@ -23,7 +23,7 @@ import { AuthRegisterStudentDto } from './dto/auth-register-student.dto';
 
 @ApiTags('Auth')
 @ApiBasicAuth('JWT-auth')
-@Controller({ path: 'api/v1/auth', version: '1' })
+@Controller({ path: 'auth', version: '1' })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

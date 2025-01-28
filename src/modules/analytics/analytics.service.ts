@@ -18,15 +18,15 @@ export class AnalyticsService {
     const lastMonthStart = startOfMonth(subMonths(new Date(), 1));
     const lastMonthEnd = endOfMonth(subMonths(new Date(), 1));
 
-    const totalUsers = await this.prisma.users.count();
-    const activeUsersMonthly = await this.prisma.users.count({
+    const totalUsers = await this.prisma.user.count();
+    const activeUsersMonthly = await this.prisma.user.count({
       where: {
         updated_at: {
           gte: subMonths(new Date(), 1),
         },
       },
     });
-    const activeUsersDaily = await this.prisma.users.count({
+    const activeUsersDaily = await this.prisma.user.count({
       where: {
         updated_at: {
           gte: subDays(new Date(), 1),
@@ -34,7 +34,7 @@ export class AnalyticsService {
       },
     });
 
-    const lastMonthActiveUsers = await this.prisma.users.count({
+    const lastMonthActiveUsers = await this.prisma.user.count({
       where: {
         updated_at: {
           gte: lastMonthStart,
@@ -46,7 +46,7 @@ export class AnalyticsService {
     const yesterdayStart = startOfDay(subDays(new Date(), 1));
     const yesterdayEnd = endOfDay(subDays(new Date(), 1));
 
-    const lastDailyActiveUsers = await this.prisma.users.count({
+    const lastDailyActiveUsers = await this.prisma.user.count({
       where: {
         updated_at: {
           gte: yesterdayStart, // Greater than or equal (>=) tanggal mulai kemarin
@@ -68,10 +68,10 @@ export class AnalyticsService {
     const lastMonthStart = startOfMonth(subMonths(new Date(), 1));
     const lastMonthEnd = endOfMonth(subMonths(new Date(), 1));
 
-    const totalContents = await this.prisma.contents.count();
+    const totalContents = await this.prisma.content.count();
 
     // Mendapatkan konten terpopuler berdasarkan rata-rata rating
-    const popularContent = await this.prisma.ratings.groupBy({
+    const popularContent = await this.prisma.rating.groupBy({
       by: ['content_id'],
       _avg: {
         rating_value: true,
@@ -84,7 +84,7 @@ export class AnalyticsService {
       take: 5, // Ambil 5 konten dengan rata-rata rating tertinggi
     });
 
-    const monthlyContentCreate = await this.prisma.contents.count({
+    const monthlyContentCreate = await this.prisma.content.count({
       where: {
         created_at: {
           gte: subMonths(new Date(), 1),
@@ -92,7 +92,7 @@ export class AnalyticsService {
       },
     });
 
-    const lastMonthContentCreate = await this.prisma.contents.count({
+    const lastMonthContentCreate = await this.prisma.content.count({
       where: {
         created_at: {
           gte: lastMonthStart,
@@ -115,49 +115,49 @@ export class AnalyticsService {
     const currentSixMonths = subMonths(new Date(), 6); // 6 bulan terakhir
     const previousSixMonths = subMonths(currentSixMonths, 6); // 6 bulan sebelum 6 bulan terakhir
     const contentType = {
-      ebook: await this.prisma.contents.count({
+      ebook: await this.prisma.content.count({
         where: {
-          type: 'EBOOK',
+          type: 'Ebook',
           created_at: {
             gte: currentSixMonths,
           },
         },
       }),
-      novel: await this.prisma.contents.count({
+      novel: await this.prisma.content.count({
         where: {
-          type: 'STORY',
+          type: 'Story',
           created_at: {
             gte: currentSixMonths,
           },
         },
       }),
-      audioPodcast: await this.prisma.contents.count({
+      audioPodcast: await this.prisma.content.count({
         where: {
-          type: 'AUDIO',
+          type: 'Audio',
           created_at: {
             gte: currentSixMonths,
           },
         },
       }),
-      pklReport: await this.prisma.contents.count({
+      pklReport: await this.prisma.content.count({
         where: {
-          type: 'PRAKERIN',
+          type: 'Prakerin',
           created_at: {
             gte: currentSixMonths,
           },
         },
       }),
-      videoPodcast: await this.prisma.contents.count({
+      videoPodcast: await this.prisma.content.count({
         where: {
-          type: 'VIDEO',
+          type: 'Video',
           created_at: {
             gte: currentSixMonths,
           },
         },
       }),
-      blog: await this.prisma.contents.count({
+      blog: await this.prisma.content.count({
         where: {
-          type: 'BLOG',
+          type: 'Blog',
           created_at: {
             gte: currentSixMonths,
           },
@@ -165,7 +165,7 @@ export class AnalyticsService {
       }),
     };
 
-    const contentTypeCurrent = await this.prisma.contents.count({
+    const contentTypeCurrent = await this.prisma.content.count({
       where: {
         created_at: {
           gte: currentSixMonths,
@@ -173,7 +173,7 @@ export class AnalyticsService {
       },
     });
 
-    const contentTypePrevious = await this.prisma.contents.count({
+    const contentTypePrevious = await this.prisma.content.count({
       where: {
         created_at: {
           gte: previousSixMonths,
@@ -206,10 +206,10 @@ export class AnalyticsService {
     const sixMonthsAgo = subMonths(currentDate, 5); // 5 bulan + bulan ini = 6 bulan
 
     // Menggunakan groupBy untuk mengelompokkan data berdasarkan bulan
-    const monthlyReports = await this.prisma.contents.groupBy({
+    const monthlyReports = await this.prisma.content.groupBy({
       by: ['created_at'],
       where: {
-        type: 'STORY',
+        type: 'Story',
         created_at: {
           gte: startOfMonth(sixMonthsAgo), // Mulai dari awal 6 bulan yang lalu
           lte: endOfMonth(currentDate), // Hingga akhir bulan ini
@@ -256,11 +256,11 @@ export class AnalyticsService {
   async getFeedbackStats() {
     const currentDate = new Date();
 
-    const commentTotal = await this.prisma.comments.count();
-    const ratingTotal = await this.prisma.ratings.count();
+    const commentTotal = await this.prisma.comment.count();
+    const ratingTotal = await this.prisma.rating.count();
 
     // Mendapatkan data rating untuk periode 3 bulan terakhir
-    const ratingsData = await this.prisma.ratings.groupBy({
+    const ratingsData = await this.prisma.rating.groupBy({
       by: ['created_at'],
       _avg: {
         rating_value: true,
@@ -279,7 +279,7 @@ export class AnalyticsService {
     const ratingMap = new Map();
 
     // Agregasi comments berdasarkan tanggal
-    const commentsData = await this.prisma.comments.groupBy({
+    const commentsData = await this.prisma.comment.groupBy({
       by: ['created_at'],
       _count: true,
       where: {

@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   HttpCode,
-  HttpException,
   HttpStatus,
   Param,
   Patch,
   Post,
   Req,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -19,17 +19,16 @@ import { Roles } from 'src/modules/roles/roles.decorator';
 import { ApiCreatedResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Competition } from '../entities/competition.entity';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { CreateSubmissionDto } from '../dto/create-submission.dto';
-import { SupabaseService } from 'src/supabase';
-import { ContentFileEnum } from 'src/modules/contents/content-file.enum';
+import { FileUploadService } from 'src/modules/file-upload/file-upload.service';
 
 @ApiTags('Submission')
-@Controller({ path: 'api/v1/competitions/submissions', version: '1' })
+@Controller({ path: 'competitions/submissions', version: '1' })
 export class SubmissionController {
   constructor(
     private readonly submissionService: SubmissionService,
-    private readonly supabaseService: SupabaseService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   @Patch(':submissionUuid/approve')
@@ -55,7 +54,7 @@ export class SubmissionController {
     type: Competition,
   })
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file_url' }]),
+    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
   )
   @ApiResponse({
     status: 201,
@@ -65,94 +64,51 @@ export class SubmissionController {
   @HttpCode(HttpStatus.CREATED)
   async submitToCompetition(
     @Req() req: Request,
+    @Res() res: Response,
     @UploadedFiles()
     files: {
-      thumbnail?: Express.Multer.File[];
-      file_url?: Express.Multer.File[];
+      thumbnail: Express.Multer.File;
+      file: Express.Multer.File;
     },
     @Body() createSubmissionDto: CreateSubmissionDto,
   ) {
     const user = req.user;
-    let thumbFilename: string;
-    let fileFilename: string;
 
     try {
       // Upload thumbnail if present
-      if (files.thumbnail && files.thumbnail.length > 0) {
-        const { success, url, fileName, error } =
-          await this.supabaseService.uploadFile(
-            files.thumbnail[0],
-            `skilins_storage/thumbnails`,
-          );
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail,
+      );
 
-        if (!success) {
-          throw new Error(`Failed to upload thumbnail: ${error}`);
-        }
-
-        thumbFilename = fileName;
-        switch (createSubmissionDto.type) {
-          case 'AUDIO':
-            createSubmissionDto.audioData.thumbnail = url;
-            break;
-          case 'VIDEO':
-            createSubmissionDto.videoData.thumbnail = url;
-            break;
-          case 'PRAKERIN':
-            createSubmissionDto.prakerinData.thumbnail = url;
-            break;
-        }
+      switch (createSubmissionDto.type) {
+        case 'Audio':
+          createSubmissionDto.audioData.thumbnail = thumbnail.filePath;
+          break;
+        case 'Video':
+          createSubmissionDto.videoData.thumbnail = thumbnail.filePath;
+          break;
+        case 'Prakerin':
+          createSubmissionDto.prakerinData.thumbnail = thumbnail.filePath;
+          break;
       }
 
       switch (createSubmissionDto.type) {
-        case 'AUDIO':
-          if (files.file_url && files.file_url.length > 0) {
-            const { success, url, fileName, error } =
-              await this.supabaseService.uploadFile(
-                files.file_url[0],
-                `skilins_storage/${ContentFileEnum.file_audio}`,
-              );
+        case 'Audio':
+          const file_audio = this.fileUploadService.handleFileUpload(
+            files.file,
+          );
+          createSubmissionDto.audioData.file = file_audio.filePath;
 
-            if (!success) {
-              throw new Error(`Failed to upload audio file: ${error}`);
-            }
-
-            fileFilename = fileName;
-            createSubmissionDto.audioData.file_url = url;
-          }
           break;
 
-        case 'VIDEO':
-          if (files.file_url && files.file_url.length > 0) {
-            const { success, url, fileName, error } =
-              await this.supabaseService.uploadFile(
-                files.file_url[0],
-                `skilins_storage/${ContentFileEnum.file_video}`,
-              );
-
-            if (!success) {
-              throw new Error(`Failed to upload video file: ${error}`);
-            }
-
-            fileFilename = fileName;
-            createSubmissionDto.videoData.file_url = url;
-          }
+        case 'Video':
           break;
 
-        case 'PRAKERIN':
-          if (files.file_url && files.file_url.length > 0) {
-            const { success, url, fileName, error } =
-              await this.supabaseService.uploadFile(
-                files.file_url[0],
-                `skilins_storage/${ContentFileEnum.file_report}`,
-              );
-
-            if (!success) {
-              throw new Error(`Failed to upload ebook file: ${error}`);
-            }
-
-            fileFilename = fileName;
-            createSubmissionDto.prakerinData.file_url = url;
-          }
+        case 'Prakerin':
+          const file_prakerin = this.fileUploadService.handleFileUpload(
+            files.file,
+          );
+          createSubmissionDto.prakerinData.file = file_prakerin.filePath;
           break;
 
         default:
@@ -165,50 +121,15 @@ export class SubmissionController {
         createSubmissionDto,
       );
 
-      return submit;
-    } catch (error) {
-      console.error('Error during competition submission:', error.message);
+      return res.status(HttpStatus.CREATED).json(submit);
+    } catch (e) {
+      console.error('Error during submission creation:', e.message);
 
-      switch (createSubmissionDto.type) {
-        case 'AUDIO': {
-          const { success, error } = await this.supabaseService.deleteFile([
-            `${ContentFileEnum.file_audio}${fileFilename}`,
-            `${ContentFileEnum.thumbnail}${thumbFilename}`,
-          ]);
-          if (!success) {
-            console.error('Failed to delete files:', error);
-          }
-          break;
-        }
-        case 'VIDEO': {
-          const { success, error } = await this.supabaseService.deleteFile([
-            `${ContentFileEnum.file_video}${fileFilename}`,
-            `${ContentFileEnum.thumbnail}${thumbFilename}`,
-          ]);
-          if (!success) {
-            console.error('Failed to delete files:', error);
-          }
-          break;
-        }
-        case 'PRAKERIN': {
-          const { success, error } = await this.supabaseService.deleteFile([
-            `${ContentFileEnum.file_report}${fileFilename}`,
-            `${ContentFileEnum.thumbnail}${thumbFilename}`,
-          ]);
-          if (!success) {
-            console.error('Failed to delete files:', error);
-          }
-          break;
-        }
-      }
-
-      throw new HttpException(
-        {
-          status: HttpStatus.INTERNAL_SERVER_ERROR,
-          error: `Competition creation failed: ${error.message}.`,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'failed',
+        message: 'Failed to create submission.',
+        detail: e.message,
+      });
     }
   }
 }

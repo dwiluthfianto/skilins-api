@@ -9,7 +9,7 @@ export class CreateMajorDto {
 
   @ApiPropertyOptional({ type: String, format: 'binary' })
   @IsOptional()
-  image_url?: string;
+  image?: string;
 
   @ApiPropertyOptional({ example: 'This is a description', type: String })
   @IsOptional()
@@ -18,5 +18,5 @@ export class CreateMajorDto {
 
   @ApiPropertyOptional({ type: String, format: 'binary' })
   @IsOptional()
-  avatar_url?: string;
+  avatar?: string;
 }
