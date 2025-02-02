@@ -191,13 +191,13 @@ export class StudentService {
           id: student.user_id,
         },
         data: {
-          role: { connect: { name: RoleType.Student } },
+          role: { connect: { name: RoleType.student } },
         },
       });
 
       return {
         status: 'success',
-        message: 'Student verified!',
+        message: 'student verified!',
       };
     });
 

@@ -117,7 +117,7 @@ export class AnalyticsService {
     const contentType = {
       ebook: await this.prisma.content.count({
         where: {
-          type: 'Ebook',
+          type: 'ebook',
           created_at: {
             gte: currentSixMonths,
           },
@@ -125,7 +125,7 @@ export class AnalyticsService {
       }),
       novel: await this.prisma.content.count({
         where: {
-          type: 'Story',
+          type: 'story',
           created_at: {
             gte: currentSixMonths,
           },
@@ -133,7 +133,7 @@ export class AnalyticsService {
       }),
       audioPodcast: await this.prisma.content.count({
         where: {
-          type: 'Audio',
+          type: 'audio',
           created_at: {
             gte: currentSixMonths,
           },
@@ -141,7 +141,7 @@ export class AnalyticsService {
       }),
       pklReport: await this.prisma.content.count({
         where: {
-          type: 'Prakerin',
+          type: 'prakerin',
           created_at: {
             gte: currentSixMonths,
           },
@@ -149,7 +149,7 @@ export class AnalyticsService {
       }),
       videoPodcast: await this.prisma.content.count({
         where: {
-          type: 'Video',
+          type: 'video',
           created_at: {
             gte: currentSixMonths,
           },
@@ -157,7 +157,7 @@ export class AnalyticsService {
       }),
       blog: await this.prisma.content.count({
         where: {
-          type: 'Blog',
+          type: 'blog',
           created_at: {
             gte: currentSixMonths,
           },
@@ -209,7 +209,7 @@ export class AnalyticsService {
     const monthlyReports = await this.prisma.content.groupBy({
       by: ['created_at'],
       where: {
-        type: 'Story',
+        type: 'story',
         created_at: {
           gte: startOfMonth(sixMonthsAgo), // Mulai dari awal 6 bulan yang lalu
           lte: endOfMonth(currentDate), // Hingga akhir bulan ini

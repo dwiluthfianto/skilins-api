@@ -35,7 +35,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 @ApiTags('Major')
 @Controller({ path: 'majors', version: '1' })
 @ApiBasicAuth('JWT-auth')
-@Roles('Staff')
+@Roles('staff')
 export class MajorController {
   constructor(
     private readonly majorService: MajorService,
@@ -47,37 +47,30 @@ export class MajorController {
     type: Major,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image' }, { name: 'avatar' }]),
+    FileFieldsInterceptor([
+      { name: 'image', maxCount: 1 },
+      { name: 'avatar', maxCount: 1 },
+    ]),
   )
   @ApiConsumes('multipart/form-data')
   async create(
     @UploadedFiles()
     files: {
-      image: Express.Multer.File;
-      avatar: Express.Multer.File;
+      image?: Express.Multer.File[];
+      avatar?: Express.Multer.File[];
     },
     @Body() createMajorDto: CreateMajorDto,
     @Res() res: Response,
   ) {
-    try {
-      const image = this.fileUploadService.handleFileUpload(files.image);
-      createMajorDto.image = image.filePath;
+    const image = this.fileUploadService.handleFileUpload(files.image[0]);
+    createMajorDto.image = image.filePath;
 
-      const avatar = this.fileUploadService.handleFileUpload(files.avatar);
-      createMajorDto.avatar = avatar.filePath;
-      const result = await this.majorService.create(createMajorDto);
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during major creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create major.',
-        detail: e.message,
-      });
-    }
+    const avatar = this.fileUploadService.handleFileUpload(files.avatar[0]);
+    createMajorDto.avatar = avatar.filePath;
+    const result = await this.majorService.create(createMajorDto);
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -110,50 +103,46 @@ export class MajorController {
     type: Major,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image' }, { name: 'avatar' }]),
+    FileFieldsInterceptor([
+      { name: 'image', maxCount: 1 },
+      { name: 'avatar', maxCount: 1 },
+    ]),
   )
   @ApiConsumes('multipart/form-data')
   async update(
     @Param('majorUuid') majorUuid: string,
     @UploadedFiles()
     files: {
-      image: Express.Multer.File;
-      avatar: Express.Multer.File;
+      image?: Express.Multer.File[];
+      avatar?: Express.Multer.File[];
     },
     @Body() updateMajorDto: UpdateMajorDto,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.majorService.findMajorByUuid(majorUuid);
+    const isExist = await this.majorService.findMajorByUuid(majorUuid);
 
+    if (files.image && files.image.length > 0) {
       const image = this.fileUploadService.updateFile(
         isExist.data.image,
-        files.image,
+        files.image[0],
       );
       updateMajorDto.image = image.filePath;
-
+    }
+    if (files.avatar && files.avatar.length > 0) {
       const avatar = this.fileUploadService.updateFile(
         isExist.data.avatar,
-        files.avatar,
+        files.avatar[0],
       );
       updateMajorDto.avatar = avatar.filePath;
-
-      const updatedMajor = await this.majorService.updateMajorByUuid(
-        majorUuid,
-        updateMajorDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedMajor);
-    } catch (error) {
-      console.error('Error updating major:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update major',
-        detail: error.message,
-      });
     }
+    const updatedMajor = await this.majorService.updateMajorByUuid(
+      majorUuid,
+      updateMajorDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedMajor);
   }
 
   @Delete(':majorUuid')
@@ -161,24 +150,15 @@ export class MajorController {
     type: Major,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @HttpCode(HttpStatus.OK)
   async remove(@Param('majorUuid') majorUuid: string, @Res() res: Response) {
-    try {
-      const isExist = await this.majorService.findMajorByUuid(majorUuid);
-      this.fileUploadService.deleteFile(isExist.data.avatar);
-      this.fileUploadService.deleteFile(isExist.data.image);
+    const isExist = await this.majorService.findMajorByUuid(majorUuid);
+    this.fileUploadService.deleteFile(isExist.data.avatar);
+    this.fileUploadService.deleteFile(isExist.data.image);
 
-      const major = await this.majorService.removeMajorByUuid(majorUuid);
+    const major = await this.majorService.removeMajorByUuid(majorUuid);
 
-      return res.status(HttpStatus.OK).json(major);
-    } catch (error) {
-      console.error('Error updating major:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove major!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(major);
   }
 }

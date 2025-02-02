@@ -1,27 +1,34 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { RegisterJudgeDto } from '../dto/register-judge.dto';
 import * as bcrypt from 'bcrypt';
-import { RoleType } from '@prisma/client';
+import { Prisma, RoleType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EvaluateSubmissionDto } from '../dto/evaluate-submission.dto';
 import { UpdateJudgeDto } from '../dto/update-judge.dto';
+import { FindJudgeDto } from '../dto/find-judge.dto';
 
 @Injectable()
 export class JudgeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prismaService: PrismaService) {}
 
-  async findAllJudges(page?: number, limit?: number, search: string = '') {
-    const judge = await this.prisma.user.findMany({
+  async findAllJudges(query: FindJudgeDto) {
+    const { page, limit, name } = query;
+
+    const filterName = {
+      full_name: {
+        contains: name,
+        mode: Prisma.QueryMode.insensitive,
+      },
+    };
+    const judge = await this.prismaService.user.findMany({
       where: {
-        role: { name: RoleType.Judge },
-        full_name: {
-          contains: search,
-          mode: 'insensitive',
-        },
+        role: { name: RoleType.judge },
+        ...filterName,
       },
       select: {
         uuid: true,
@@ -44,20 +51,17 @@ export class JudgeService {
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
     });
 
-    const total = await this.prisma.user.count({
+    const total = await this.prismaService.user.count({
       where: {
-        role: { name: RoleType.Judge },
-        full_name: {
-          contains: search,
-          mode: 'insensitive',
-        },
+        role: { name: RoleType.judge },
+        ...filterName,
       },
     });
 
     return {
       status: 'success',
       data: judge.map((judge) => {
-        const judgeData = judge.judge?.[0];
+        const judgeData = judge.judge;
         return {
           uuid: judge.uuid,
           profile: judge.profile,
@@ -69,45 +73,49 @@ export class JudgeService {
           competition: judgeData.competition?.title,
         };
       }),
-      totalPages: limit ? Math.ceil(total / limit) : 1,
-      page: page || 1,
-      lastPage: limit ? Math.ceil(total / limit) : 1,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 
   async regisNewJudge(registerJudgeDto: RegisterJudgeDto) {
     const hashedPassword = await bcrypt.hash(registerJudgeDto.password, 10);
 
-    const newUser = await this.prisma.user.create({
-      data: {
-        email: registerJudgeDto.email,
-        password: hashedPassword,
-        email_verified: true,
-        full_name: registerJudgeDto.full_name,
-        role: { connect: { name: RoleType.Judge } },
-      },
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const newUser = await prisma.user.create({
+        data: {
+          email: registerJudgeDto.email,
+          password: hashedPassword,
+          email_verified: true,
+          full_name: registerJudgeDto.full_name,
+          role: { connect: { name: RoleType.judge } },
+        },
+      });
+
+      const newJudge = await prisma.judge.create({
+        data: {
+          role: registerJudgeDto.role,
+          linkedin: registerJudgeDto.linkedin,
+          instagram: registerJudgeDto.instagram,
+          user: { connect: { id: newUser.id } },
+        },
+      });
+
+      return {
+        status: 'success',
+        message: 'judge added successfully!',
+      };
     });
 
-    const newJudge = await this.prisma.judge.create({
-      data: {
-        role: registerJudgeDto.role,
-        linkedin: registerJudgeDto.linkedin,
-        instagram: registerJudgeDto.instagram,
-        user: { connect: { id: newUser.id } },
-      },
-    });
-
-    return {
-      status: 'success',
-      message: 'Judge added successfully!',
-      data: {
-        uuid: newJudge.uuid,
-      },
-    };
+    return res;
   }
 
   async updateInfoJudge(judgeUuid: string, updateJudgeDto: UpdateJudgeDto) {
-    const userJudge = await this.prisma.user.findUniqueOrThrow({
+    const userJudge = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid: judgeUuid },
       select: {
         judge: {
@@ -118,7 +126,7 @@ export class JudgeService {
       },
     });
 
-    const judge = await this.prisma.user.update({
+    const judge = await this.prismaService.user.update({
       where: {
         uuid: judgeUuid,
       },
@@ -141,7 +149,7 @@ export class JudgeService {
 
     return {
       status: 'success',
-      message: 'Judge updated successfully!',
+      message: 'judge updated successfully!',
       data: {
         uuid: judge.uuid,
       },
@@ -149,7 +157,7 @@ export class JudgeService {
   }
 
   async removeJudge(judgeUuid: string) {
-    const userJudge = await this.prisma.user.findUniqueOrThrow({
+    const userJudge = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid: judgeUuid },
       select: {
         judge: {
@@ -160,25 +168,25 @@ export class JudgeService {
       },
     });
 
-    await this.prisma.user.update({
+    await this.prismaService.user.update({
       where: { uuid: judgeUuid },
       data: {
-        role: { connect: { name: RoleType.User } },
+        role: { connect: { name: RoleType.user } },
       },
     });
 
-    await this.prisma.judge.delete({
-      where: { uuid: userJudge.judge[0].uuid },
+    await this.prismaService.judge.delete({
+      where: { uuid: userJudge.judge.uuid },
     });
 
     return {
       status: 'success',
-      message: 'Judge deleted successfully',
+      message: 'judge deleted successfully',
     };
   }
 
   async findAllEvaluationParameter(competitionUuid: string) {
-    const parameters = await this.prisma.evaluationParameter.findMany({
+    const parameters = await this.prismaService.evaluationParameter.findMany({
       where: { competition: { uuid: competitionUuid } },
     });
 
@@ -201,64 +209,78 @@ export class JudgeService {
     const { submission_uuid, parameter_scores } = evaluateSubmissionDto;
 
     // Cari submission dan validasi kompetisi
-    const submission = await this.prisma.submission.findUniqueOrThrow({
-      where: { uuid: submission_uuid },
-      include: { competition: { include: { evaluation_parameter: true } } },
-    });
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      const submission = await prisma.submission.findUnique({
+        where: { uuid: submission_uuid },
+        include: { competition: { include: { evaluation_parameter: true } } },
+      });
 
-    // Validasi bahwa juri adalah bagian dari kompetisi
-    const judge = await this.prisma.judge.findFirstOrThrow({
-      where: {
-        user: { uuid: judgeUuid },
-        competition_id: submission.competition_id,
-      },
-    });
-
-    // Validasi parameter evaluasi
-    const validParameters = submission.competition.evaluation_parameter.map(
-      (p) => p.uuid,
-    );
-    for (const param of parameter_scores) {
-      if (!validParameters.includes(param.parameter_uuid)) {
-        throw new BadRequestException(
-          `Invalid parameter UUID: ${param.parameter_uuid}`,
+      if (!submission) {
+        throw new NotFoundException(
+          'Submission not found, please make sure you input correct submission',
         );
       }
-    }
 
-    // Simpan setiap skor parameter ke database
-    const scores = await Promise.all(
-      parameter_scores.map(async (param) => {
-        const evaluationParameter =
-          await this.prisma.evaluationParameter.findUniqueOrThrow({
-            where: { uuid: param.parameter_uuid },
+      // Validasi bahwa juri adalah bagian dari kompetisi
+      const judge = await prisma.judge.findFirst({
+        where: {
+          user: { uuid: judgeUuid },
+          competition_id: submission.competition_id,
+        },
+      });
+
+      if (!submission) {
+        throw new ForbiddenException(
+          'Judge not registered for this competition!',
+        );
+      }
+
+      // Validasi parameter evaluasi
+      const validParameters = submission.competition.evaluation_parameter.map(
+        (p) => p.uuid,
+      );
+      for (const param of parameter_scores) {
+        if (!validParameters.includes(param.parameter_uuid)) {
+          throw new BadRequestException(
+            `Invalid parameter UUID: ${param.parameter_uuid}`,
+          );
+        }
+      }
+
+      // Simpan setiap skor parameter ke database
+      const scores = await Promise.all(
+        parameter_scores.map(async (param) => {
+          const evaluationParameter =
+            await prisma.evaluationParameter.findUniqueOrThrow({
+              where: { uuid: param.parameter_uuid },
+            });
+
+          return prisma.score.create({
+            data: {
+              judge_id: judge.id,
+              submission_id: submission.id,
+              parameter_id: evaluationParameter.id,
+              score: param.score,
+              notes: param.notes || null,
+            },
           });
+        }),
+      );
 
-        return this.prisma.score.create({
-          data: {
-            judge_id: judge.id,
-            submission_id: submission.id,
-            parameter_id: evaluationParameter.id,
-            score: param.score,
-            notes: param.notes || null,
-          },
-        });
-      }),
-    );
-
-    return {
-      status: 'success',
-      message: 'Submission evaluated successfully',
-      data: scores,
-    };
+      return {
+        status: 'success',
+        message: 'Submission evaluated successfully',
+        data: scores,
+      };
+    });
   }
 
   async getScoredSubmission(competitionUuid: string) {
-    const scored = await this.prisma.submission.findMany({
+    const scored = await this.prismaService.submission.findMany({
       where: {
         competition: { uuid: competitionUuid },
         content: {
-          status: 'Approved',
+          status: 'approved',
         },
         score: {
           some: {
@@ -285,11 +307,11 @@ export class JudgeService {
   }
 
   async getUnscoredSubmission(competitionUuid: string) {
-    const unscored = await this.prisma.submission.findMany({
+    const unscored = await this.prismaService.submission.findMany({
       where: {
         competition: { uuid: competitionUuid },
         content: {
-          status: 'Approved',
+          status: 'approved',
         },
         score: {
           none: {
@@ -316,11 +338,11 @@ export class JudgeService {
   }
 
   async summaryJudges(competitionUuid: string) {
-    const scoredSubmissions = await this.prisma.submission.count({
+    const scoredSubmissions = await this.prismaService.submission.count({
       where: {
         competition: { uuid: competitionUuid },
         content: {
-          status: 'Approved',
+          status: 'approved',
         },
         score: {
           some: {
@@ -332,11 +354,11 @@ export class JudgeService {
       },
     });
 
-    const unscoredSubmissions = await this.prisma.submission.count({
+    const unscoredSubmissions = await this.prismaService.submission.count({
       where: {
         competition: { uuid: competitionUuid },
         content: {
-          status: 'Approved',
+          status: 'approved',
         },
         score: {
           none: {
@@ -348,16 +370,16 @@ export class JudgeService {
       },
     });
 
-    const totalSubmissions = await this.prisma.submission.count({
+    const totalSubmissions = await this.prismaService.submission.count({
       where: {
         competition: { uuid: competitionUuid },
         content: {
-          status: 'Approved',
+          status: 'approved',
         },
       },
     });
 
-    const deadlineJudge = await this.prisma.competition.findUnique({
+    const deadlineJudge = await this.prismaService.competition.findUnique({
       where: {
         uuid: competitionUuid,
       },
@@ -375,7 +397,7 @@ export class JudgeService {
   }
 
   async getJudge(userUuid: string) {
-    const judge = await this.prisma.user.findUnique({
+    const judge = await this.prismaService.user.findUnique({
       where: {
         uuid: userUuid,
       },

@@ -16,7 +16,7 @@ import { ContentStatus } from '@prisma/client';
 @ApiTags('Contents')
 @ApiBasicAuth('JWT-auth')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('Staff')
+@Roles('staff')
 @Controller({ path: 'contents', version: '1' })
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
@@ -26,7 +26,7 @@ export class ContentController {
   async approveContent(@Param('contentUuid') contentUuid: string) {
     return this.contentService.updateContentStatus(
       contentUuid,
-      ContentStatus.Approved,
+      ContentStatus.approved,
     );
   }
 
@@ -35,7 +35,7 @@ export class ContentController {
   async rejectContent(@Param('contentUuid') contentUuid: string) {
     return this.contentService.updateContentStatus(
       contentUuid,
-      ContentStatus.Rejected,
+      ContentStatus.rejected,
     );
   }
 }

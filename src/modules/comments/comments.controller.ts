@@ -11,7 +11,7 @@ import { DeleteCommentDto } from './dto/delete-comment.dto';
 @Controller({ path: 'comments', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @ApiBasicAuth('JWT-auth')
-@Roles('User', 'Student', 'Judge', 'Staff')
+@Roles('User', 'student', 'judge', 'staff')
 export class CommentController {
   constructor(private readonly commentsService: CommentService) {}
 

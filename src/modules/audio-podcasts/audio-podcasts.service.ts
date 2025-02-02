@@ -1,5 +1,9 @@
 import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -16,10 +20,14 @@ import { subMonths } from 'date-fns';
 @Injectable()
 export class AudioPodcastService {
   constructor(
+    @Inject(Logger)
+    private readonly logger: Logger,
     private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
-  ) {}
+  ) {
+    this.logger = new Logger('Audio Podcast Logger');
+  }
 
   async createAudioPodcast(creatorUuid: string, data: CreateAudioPodcastDto) {
     const {
@@ -48,21 +56,31 @@ export class AudioPodcastService {
       });
 
       if (!userData) {
+        this.logger.error(
+          'student not found, please make sure you input correct student',
+        );
         throw new NotFoundException(
-          'Student not found, please make sure you input correct student',
+          'student not found, please make sure you input correct student',
         );
       }
 
       const fileAttachment = await prisma.fileAttachment.create({
         data: {
           file: file,
-          type: 'Audio',
+          type: 'audio',
         },
       });
 
+      if (!fileAttachment && !thumbnail) {
+        this.logger.error('Please provide the thumbnail and file audio!');
+        throw new BadRequestException(
+          'Please provide the thumbnail and file audio!',
+        );
+      }
+
       await prisma.content.create({
         data: {
-          type: 'Audio',
+          type: 'audio',
           title,
           thumbnail,
           description,
@@ -116,7 +134,7 @@ export class AudioPodcastService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -188,8 +206,11 @@ export class AudioPodcastService {
     const audios = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Audio',
+        type: 'audio',
         ...filter,
+      },
+      orderBy: {
+        created_at: 'desc',
       },
       include: {
         rating: true,
@@ -197,7 +218,7 @@ export class AudioPodcastService {
     });
 
     const total = await this.prismaService.content.count({
-      where: { type: 'Audio', ...filter },
+      where: { type: 'audio', ...filter },
     });
 
     const data = await Promise.all(
@@ -245,7 +266,7 @@ export class AudioPodcastService {
 
     if (!user) {
       throw new NotFoundException(
-        'Student not found, please make sure you input correct Student',
+        'student not found, please make sure you input correct student',
       );
     }
 
@@ -261,7 +282,6 @@ export class AudioPodcastService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -334,8 +354,11 @@ export class AudioPodcastService {
     const audios = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Audio',
+        type: 'audio',
         ...filter,
+      },
+      orderBy: {
+        created_at: 'desc',
       },
       include: {
         rating: true,
@@ -344,7 +367,7 @@ export class AudioPodcastService {
 
     const total = await this.prismaService.content.count({
       where: {
-        type: 'Audio',
+        type: 'audio',
         ...filter,
       },
     });
@@ -391,6 +414,9 @@ export class AudioPodcastService {
     });
 
     if (!audio) {
+      this.logger.error(
+        'Audio not found, please make sure you input correct audio',
+      );
       throw new NotFoundException(
         'Audio not found, please make sure you input correct audio',
       );
@@ -403,7 +429,7 @@ export class AudioPodcastService {
   }
 
   async findAudioBySlug(slug: string) {
-    const audio = await this.prismaService.content.findUniqueOrThrow({
+    const audio = await this.prismaService.content.findUnique({
       where: { slug },
       include: {
         category: true,
@@ -439,6 +465,15 @@ export class AudioPodcastService {
       },
     });
 
+    if (!audio) {
+      this.logger.error(
+        'Audio not found, please make sure you input correct audio',
+      );
+      throw new NotFoundException(
+        'Audio not found, please make sure you input correct audio',
+      );
+    }
+
     const avg_rating = await this.prismaService.rating.aggregate({
       where: { content_id: audio.id },
       _avg: {
@@ -450,30 +485,21 @@ export class AudioPodcastService {
       status: 'success',
       data: {
         ...audio,
-        tags: audio.tag.map((tag) => ({
+        tag: audio.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        category: audio.category.name,
-        creator: audio.audio_podcast.creator.name,
-        duration: audio.audio_podcast.duration,
-        file_attachment: audio.audio_podcast.file_attachment.file,
-        genres: audio.genre?.map((genre) => ({
+        genre: audio.genre?.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),
-        ratings: audio.rating.map((rating) => ({
-          ...rating,
-        })),
-        comments: audio.comment.map((comment) => ({
+        comment: audio.comment.map((comment) => ({
           ...comment,
           commented_by_uuid: comment.user.uuid,
           commented_by: comment.user.full_name,
           profile: comment.user.profile,
         })),
         avg_rating: avg_rating._avg.rating_value,
-        submission_uuid: audio.submission.uuid || '',
-        competition_uuid: audio.submission.competition.uuid || '',
       },
     };
   }
@@ -513,8 +539,11 @@ export class AudioPodcastService {
       });
 
       if (!content) {
+        this.logger.error(
+          'Audio not found, please make sure you input correct audio',
+        );
         throw new NotFoundException(
-          'Content not found, please make sure you input correct content',
+          'Audio not found, please make sure you input correct audio',
         );
       }
       const category =
@@ -522,6 +551,7 @@ export class AudioPodcastService {
       const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
 
       if (creator.student.id !== content.audio_podcast.creator_id) {
+        this.logger.warn(`You don't have any permission to update this audio`);
         throw new UnauthorizedException(
           `You don't have any permission to update this audio`,
         );
@@ -538,12 +568,12 @@ export class AudioPodcastService {
         },
         data: {
           file: file,
-          type: 'Audio',
+          type: 'audio',
         },
       });
 
       await prisma.content.update({
-        where: { uuid: content.uuid, type: 'Audio' },
+        where: { uuid: content.uuid, type: 'audio' },
         data: {
           title,
           thumbnail,
@@ -606,5 +636,67 @@ export class AudioPodcastService {
     });
 
     return res;
+  }
+
+  async summaryAudioStudent(userUuid: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { uuid: userUuid },
+      include: {
+        student: true,
+      },
+    });
+
+    const student = await this.prismaService.student.findUnique({
+      where: {
+        uuid: user.student.uuid,
+      },
+    });
+
+    if (!student) {
+      throw new ForbiddenException(
+        "You don't have access to see this summary!",
+      );
+    }
+
+    const res = await this.prismaService.audioPodcast.findMany({
+      where: {
+        creator_id: student.id,
+      },
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
+  }
+
+  async summaryAudioStaff() {
+    const res = await this.prismaService.audioPodcast.findMany({
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { BlogService } from './blogs.service';
 import { BlogController } from './blogs.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
@@ -9,7 +9,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   controllers: [BlogController],
-  providers: [BlogService, UuidHelper, SlugHelper, FileUploadService],
+  providers: [BlogService, UuidHelper, SlugHelper, FileUploadService, Logger],
   imports: [PrismaModule],
 })
 export class BlogModule {}

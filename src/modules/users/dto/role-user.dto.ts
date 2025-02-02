@@ -7,7 +7,7 @@ export class RoleUserDto {
   @IsUUID()
   uuid: string;
 
-  @ApiProperty({ example: 'User', enum: RoleType, default: RoleType.User })
+  @ApiProperty({ example: 'User', enum: RoleType, default: RoleType.user })
   @IsNotEmpty()
   role: RoleType;
 }

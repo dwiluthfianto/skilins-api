@@ -26,25 +26,25 @@ model User {
   rating               Rating[]
   comment              Comment[]
   blog                 Blog[]
-  judge                Judge?
-  student              Student?
+  judge                judge?
+  student              student?
 
   @@index([uuid])
   @@map("user")
 }
 
 enum RoleType {
-  Admin
-  Student
-  User
-  Staff
-  Judge
+  admin
+  student
+  user
+  staff
+  judge
 }
 
 model Role {
   id   Int      @id @default(autoincrement())
   uuid String   @unique @default(uuid())
-  name RoleType @unique @default(User)
+  name RoleType @unique @default(user)
   user User[]
 
   @@index([uuid])
@@ -88,18 +88,18 @@ model Comment {
 }
 
 enum ContentType {
-  Ebook
-  Video
-  Audio
-  Story
-  Prakerin
-  Blog
+  ebook
+  video
+  audio
+  story
+  prakerin
+  blog
 }
 
 enum ContentStatus {
-  Pending
-  Approved
-  Rejected
+  pending
+  approved
+  rejected
 }
 
 model Content {
@@ -110,7 +110,7 @@ model Content {
   thumbnail     String
   description   String?
   slug          String        @unique
-  status        ContentStatus @default(Pending)
+  status        ContentStatus @default(pending)
   created_at    DateTime      @default(now())
   updated_at    DateTime      @updatedAt
   category_id   Int
@@ -138,8 +138,8 @@ model FileAttachment {
   type          ContentType
   size          Int?
   mimeType      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
   audio_podcast AudioPodcast[]
   ebook         Ebook[]
   prakerin      Prakerin[]
@@ -189,7 +189,7 @@ model VideoPodcast {
   uuid       String  @unique @default(uuid())
   link       String
   creator_id Int
-  creator    Student @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  creator    student @relation(fields: [creator_id], references: [id], onDelete: Cascade)
   content_id Int     @unique
   content    Content @relation(fields: [content_id], references: [id], onDelete: Cascade)
 
@@ -203,7 +203,7 @@ model AudioPodcast {
   duration        Float
   file_id         Int
   creator_id      Int
-  creator         Student        @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  creator         student        @relation(fields: [creator_id], references: [id], onDelete: Cascade)
   content_id      Int            @unique
   content         Content        @relation(fields: [content_id], references: [id], onDelete: Cascade)
   file_attachment FileAttachment @relation(fields: [file_id], references: [id], onDelete: Cascade)
@@ -245,7 +245,7 @@ model Story {
   id         Int       @id @default(autoincrement())
   uuid       String    @unique @default(uuid())
   creator_id Int
-  creator    Student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  creator    student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
   episode    Episode[]
   content_id Int       @unique
   content    Content   @relation(fields: [content_id], references: [id], onDelete: Cascade)
@@ -275,7 +275,7 @@ model Prakerin {
   id           Int       @id @default(autoincrement())
   uuid         String    @unique @default(uuid())
   creator_id   Int
-  creator      Student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  creator      student   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
   pages        Int
   file_id      Int
   published_at DateTime?
@@ -292,14 +292,14 @@ model Submission {
   id             Int         @id @default(autoincrement())
   uuid           String      @unique @default(uuid())
   student_id     Int
-  student        Student     @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  student        student     @relation(fields: [student_id], references: [id], onDelete: Cascade)
   content_id     Int         @unique
   content        Content     @relation(fields: [content_id], references: [id], onDelete: Cascade)
   competition_id Int
   competition    Competition @relation(fields: [competition_id], references: [id], onDelete: Cascade)
   created_at     DateTime    @default(now())
   updated_at     DateTime    @updatedAt
-  judge          Judge[]
+  judge          judge[]
   winner         Winner[]
   score          Score[]
 
@@ -307,7 +307,7 @@ model Submission {
   @@map("submission")
 }
 
-model Judge {
+model judge {
   id             Int          @id @default(autoincrement())
   uuid           String       @unique @default(uuid())
   user_id        Int          @unique
@@ -350,7 +350,7 @@ model Score {
   score         Int
   notes         String? // Catatan opsional dari juri
   created_at    DateTime            @default(now())
-  judge         Judge               @relation(fields: [judge_id], references: [id])
+  judge         judge               @relation(fields: [judge_id], references: [id])
   submission    Submission          @relation(fields: [submission_id], references: [id], onDelete: Cascade)
   parameter     EvaluationParameter @relation(fields: [parameter_id], references: [id], onDelete: Cascade)
 
@@ -373,7 +373,7 @@ model Competition {
   submission_deadline  DateTime
   submission           Submission[]
   winner               Winner[]
-  judge                Judge[]
+  judge                judge[]
   evaluation_parameter EvaluationParameter[]
 
   @@index([uuid])
@@ -394,11 +394,11 @@ model Winner {
 }
 
 enum SexType {
-  Male
-  Female
+  male
+  female
 }
 
-model Student {
+model student {
   id         Int       @id @default(autoincrement())
   uuid       String    @unique @default(uuid())
   nis        String    @unique
@@ -429,7 +429,7 @@ model Major {
   image       String?
   description String?
   avatar      String?
-  student     Student[]
+  student     student[]
 
   @@index([uuid])
   @@map("major")

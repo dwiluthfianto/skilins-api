@@ -8,11 +8,11 @@ const DEFAULT_IMAGE_URL =
 // Seed Roles
 async function seedRoles() {
   const roles = [
-    { name: RoleType.Admin },
-    { name: RoleType.Staff },
-    { name: RoleType.User },
-    { name: RoleType.Judge },
-    { name: RoleType.Student },
+    { name: RoleType.admin },
+    { name: RoleType.staff },
+    { name: RoleType.user },
+    { name: RoleType.judge },
+    { name: RoleType.student },
   ];
 
   await Promise.all(
@@ -34,23 +34,23 @@ async function seedUsers() {
     {
       uuid: '33af070e-9cde-4024-8e90-fbfef6b39640',
       email: 'admin@skilins.com',
-      full_name: 'Admin Skilins',
+      full_name: 'admin Skilins',
       password: '$2a$10$nKlySD74S5zVXiL9jGlpJOO4RQivq.q11R2tELbLeb38Y2wgfMHOG',
-      role: RoleType.Admin,
+      role: RoleType.admin,
     },
     {
       uuid: '38ebdc87-dca6-441b-9acf-08dda606eef4',
       email: 'staff@skilins.com',
-      full_name: 'Staff Skilins',
+      full_name: 'staff Skilins',
       password: '$2a$10$ikS7HR5PmR4nhZ1YE2M3zeCSFmAXSaPdVjOqDuvR62TgfiYvmbes6',
-      role: RoleType.Staff,
+      role: RoleType.staff,
     },
     {
       uuid: '76301743-844a-4f11-85b7-a1ffa87784de',
       email: 'student@skilins.com',
-      full_name: 'Student Skilins',
+      full_name: 'student Skilins',
       password: '$2a$10$X4ynU9Zt9WDk58jkqQyiFepxlBUZ9GP3F6vITECa9MS3YS63kvoby',
-      role: RoleType.Student,
+      role: RoleType.student,
     },
   ];
 
@@ -115,7 +115,7 @@ async function seedStudents() {
     name: 'John Doe',
     birthdate: '2004-11-12',
     birthplace: 'Bogor',
-    sex: SexType.Male,
+    sex: SexType.male,
     userUuid: '76301743-844a-4f11-85b7-a1ffa87784de',
     majorName: 'Pengembangan Perangkat Lunak dan Gim',
   };

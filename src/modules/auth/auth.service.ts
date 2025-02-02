@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthEmailLoginDto } from './dto/auth-email-login.dto';
@@ -216,16 +221,22 @@ export class AuthService {
   async login(
     authEmailLoginDto: AuthEmailLoginDto,
   ): Promise<{ accessToken?: string; refreshToken?: string; data?: any }> {
-    const user = await this.prismaService.user.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUnique({
       where: { email: authEmailLoginDto.email },
       include: { role: true },
     });
+
+    if (!user) {
+      throw new NotFoundException(
+        `User with email ${authEmailLoginDto.email} not found`,
+      );
+    }
 
     if (
       !user ||
       !(await bcrypt.compare(authEmailLoginDto.password, user.password))
     ) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Password incorrect');
     }
 
     const payload = {
@@ -259,7 +270,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(authRegisterLoginDto.password, 10);
 
     const role = await this.prismaService.role.findUnique({
-      where: { name: RoleType.User },
+      where: { name: RoleType.user },
     });
 
     const user = await this.prismaService.user.create({
@@ -277,9 +288,6 @@ export class AuthService {
       status: 'success',
       message:
         'Register successful! Please check your email to verify your account.',
-      data: {
-        uuid: user.uuid,
-      },
     };
   }
 
@@ -290,7 +298,7 @@ export class AuthService {
     );
     const res = await this.prismaService.$transaction(async (prisma) => {
       const role = await prisma.role.findUniqueOrThrow({
-        where: { name: RoleType.User },
+        where: { name: RoleType.user },
       });
 
       const user = await prisma.user.create({

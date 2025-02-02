@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -43,13 +44,13 @@ export class VideoPodcastService {
 
       if (!userData) {
         throw new NotFoundException(
-          'Student not found, please make sure you input correct student',
+          'student not found, please make sure you input correct student',
         );
       }
 
       await prisma.content.create({
         data: {
-          type: 'Video',
+          type: 'video',
           title,
           thumbnail,
           description,
@@ -101,7 +102,7 @@ export class VideoPodcastService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -173,16 +174,13 @@ export class VideoPodcastService {
     const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Video',
+        type: 'video',
         ...filter,
-      },
-      include: {
-        rating: true,
       },
     });
 
     const total = await this.prismaService.content.count({
-      where: { type: 'Video', ...filter },
+      where: { type: 'video', ...filter },
     });
 
     const data = await Promise.all(
@@ -227,7 +225,7 @@ export class VideoPodcastService {
 
     if (!user) {
       throw new NotFoundException(
-        'Student not found, please make sure you input correct Student',
+        'student not found, please make sure you input correct student',
       );
     }
 
@@ -245,7 +243,7 @@ export class VideoPodcastService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -318,14 +316,14 @@ export class VideoPodcastService {
     const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Video',
+        type: 'video',
         ...filter,
       },
     });
 
     const total = await this.prismaService.content.count({
       where: {
-        type: 'Video',
+        type: 'video',
         ...filter,
       },
     });
@@ -491,7 +489,7 @@ export class VideoPodcastService {
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
 
       await prisma.content.update({
-        where: { uuid, type: 'Video' },
+        where: { uuid, type: 'video' },
         data: {
           title,
           thumbnail,
@@ -554,5 +552,67 @@ export class VideoPodcastService {
     });
 
     return res;
+  }
+
+  async summaryVideoStudent(userUuid: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { uuid: userUuid },
+      include: {
+        student: true,
+      },
+    });
+
+    const student = await this.prismaService.student.findUnique({
+      where: {
+        uuid: user.student.uuid,
+      },
+    });
+
+    if (!student) {
+      throw new ForbiddenException(
+        "You don't have access to see this summary!",
+      );
+    }
+
+    const res = await this.prismaService.audioPodcast.findMany({
+      where: {
+        creator_id: student.id,
+      },
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
+  }
+
+  async summaryVideoStaff() {
+    const res = await this.prismaService.audioPodcast.findMany({
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
   }
 }

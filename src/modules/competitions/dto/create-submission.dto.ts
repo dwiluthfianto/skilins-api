@@ -17,15 +17,15 @@ export class CreateSubmissionDto {
   @IsEnum(ContentType)
   type: ContentType;
 
-  @ValidateIf((o) => o.type === ContentType.Audio)
+  @ValidateIf((o) => o.type === ContentType.audio)
   @Type(() => CreateAudioPodcastDto)
   audioData?: CreateAudioPodcastDto;
 
-  @ValidateIf((o) => o.type === ContentType.Video)
+  @ValidateIf((o) => o.type === ContentType.video)
   @Type(() => CreateVideoPodcastDto)
   videoData?: CreateVideoPodcastDto;
 
-  @ValidateIf((o) => o.type === ContentType.Prakerin)
+  @ValidateIf((o) => o.type === ContentType.prakerin)
   @Type(() => CreatePrakerinDto)
   prakerinData?: CreatePrakerinDto;
 }

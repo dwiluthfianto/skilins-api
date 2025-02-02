@@ -46,7 +46,7 @@ export class VideoPodcastController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @ApiCreatedResponse({
     type: VideoPodcast,
   })
@@ -60,23 +60,15 @@ export class VideoPodcastController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const file = this.fileUploadService.handleFileUpload(thumbnail);
-      createVideoPodcastDto.thumbnail = file.filePath;
 
-      const result = await this.videoPodcastService.create(
-        user['sub'],
-        createVideoPodcastDto,
-      );
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during audio podcast creation:', e.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create video podcast.',
-        detail: e.message,
-      });
-    }
+    const file = this.fileUploadService.handleFileUpload(thumbnail);
+    createVideoPodcastDto.thumbnail = file.filePath;
+
+    const result = await this.videoPodcastService.create(
+      user['sub'],
+      createVideoPodcastDto,
+    );
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -95,7 +87,7 @@ export class VideoPodcastController {
     isArray: true,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @HttpCode(HttpStatus.OK)
   async findUserVideo(
     @Req() req: Request,
@@ -116,7 +108,7 @@ export class VideoPodcastController {
 
   @Patch(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @UseInterceptors(FileInterceptor('thumbnail'))
   @ApiOkResponse({
     type: VideoPodcast,
@@ -131,56 +123,57 @@ export class VideoPodcastController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
+    const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
 
+    if (thumbnail && thumbnail.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.thumbnail,
         thumbnail,
       );
       updateVideoPodcastDto.thumbnail = file.filePath;
-
-      const updatedVideo = await this.videoPodcastService.updateVideoByUuid(
-        uuid,
-        user['sub'],
-        updateVideoPodcastDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedVideo);
-    } catch (error) {
-      console.error('Error updating video:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update video',
-        detail: error.message,
-      });
     }
+
+    const updatedVideo = await this.videoPodcastService.updateVideoByUuid(
+      uuid,
+      user['sub'],
+      updateVideoPodcastDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedVideo);
   }
 
   @Delete(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @ApiResponse({
     status: 200,
     description: 'The record has been successfully deleted.',
   })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('uuid') uuid: string, @Res() res: Response) {
-    try {
-      const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
-      const audio = await this.videoPodcastService.removeVideoByUuid(uuid);
+    const audio = await this.videoPodcastService.removeVideoByUuid(uuid);
 
-      return res.status(HttpStatus.OK).json(audio);
-    } catch (error) {
-      console.error('Error updating audio:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove audio!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(audio);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  async summaryAudioStudent(@Req() req: Request) {
+    const user = req.user;
+    return this.videoPodcastService.summaryVideoStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  async summaryAudioStaff() {
+    return this.videoPodcastService.summaryVideoStaff();
   }
 }

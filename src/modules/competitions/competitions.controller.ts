@@ -44,7 +44,7 @@ export class CompetitionController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiCreatedResponse({
     type: Competition,
   })
@@ -60,21 +60,11 @@ export class CompetitionController {
     @Body() createCompetitionDto: CreateCompetitionDto,
     @Res() res: Response,
   ) {
-    try {
-      const file = this.fileUploadService.handleFileUpload(thumbnail);
-      createCompetitionDto.thumbnail = file.filePath;
-      const result =
-        await this.competitionsService.createCompetition(createCompetitionDto);
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during competition creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create competition.',
-        detail: e.message,
-      });
-    }
+    const file = this.fileUploadService.handleFileUpload(thumbnail);
+    createCompetitionDto.thumbnail = file.filePath;
+    const result =
+      await this.competitionsService.createCompetition(createCompetitionDto);
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -98,7 +88,7 @@ export class CompetitionController {
 
   @Patch(':competitionUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiCreatedResponse({
     type: Competition,
   })
@@ -111,56 +101,41 @@ export class CompetitionController {
     @Body() updateCompetitionDto: UpdateCompetitionDto,
     @Res() res: Response,
   ) {
-    try {
-      const isExist =
-        await this.competitionsService.findCompetitionByUuid(competitionUuid);
+    const isExist =
+      await this.competitionsService.findCompetitionByUuid(competitionUuid);
+
+    if (thumbnail && thumbnail.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.thumbnail,
         thumbnail,
       );
       updateCompetitionDto.thumbnail = file.filePath;
-      const competition = await this.competitionsService.updateCompetition(
-        competitionUuid,
-        updateCompetitionDto,
-      );
-
-      return res.status(HttpStatus.OK).json(competition);
-    } catch (error) {
-      console.error('Error updating category:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update competition',
-        detail: error.message,
-      });
     }
+    const competition = await this.competitionsService.updateCompetition(
+      competitionUuid,
+      updateCompetitionDto,
+    );
+
+    return res.status(HttpStatus.OK).json(competition);
   }
 
   @Delete(':competitionUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({ type: Competition })
   @HttpCode(HttpStatus.OK)
   async remove(
     @Param('competitionUuid') competitionUuid: string,
     @Res() res: Response,
   ) {
-    try {
-      const isExist =
-        await this.competitionsService.getCompetitionByUuid(competitionUuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    const isExist =
+      await this.competitionsService.getCompetitionByUuid(competitionUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
-      const result =
-        await this.competitionsService.removeCompetition(competitionUuid);
+    const result =
+      await this.competitionsService.removeCompetition(competitionUuid);
 
-      return res.status(HttpStatus.OK).json(result);
-    } catch (error) {
-      console.error('Error deleting category:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to delete category',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(result);
   }
 
   @Get(':uuid/winners')

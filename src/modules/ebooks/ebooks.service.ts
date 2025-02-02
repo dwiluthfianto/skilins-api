@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateEbookDto } from './dto/create-ebook.dto';
 import { UpdateEbookDto } from './dto/update-ebook.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -12,10 +17,13 @@ import { subMonths } from 'date-fns';
 @Injectable()
 export class EbookService {
   constructor(
+    private readonly logger: Logger,
     private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
-  ) {}
+  ) {
+    this.logger = new Logger('Ebook Logger');
+  }
 
   async create(createContentDto: CreateEbookDto) {
     const {
@@ -41,17 +49,24 @@ export class EbookService {
       const fileAttachment = await prisma.fileAttachment.create({
         data: {
           file: file,
-          type: 'Ebook',
+          type: 'ebook',
         },
       });
 
+      if (!fileAttachment && !thumbnail) {
+        this.logger.error('Please provide the thumbnail and file ebook!');
+        throw new BadRequestException(
+          'Please provide the thumbnail and file ebook!',
+        );
+      }
+
       await prisma.content.create({
         data: {
-          type: 'Ebook',
+          type: 'ebook',
           title,
           thumbnail,
           description,
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           slug: newSlug,
           tag: {
             connectOrCreate: parsedTags?.map((tag) => ({
@@ -106,7 +121,7 @@ export class EbookService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -178,7 +193,7 @@ export class EbookService {
     const content = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Ebook',
+        type: 'ebook',
         ...filter,
       },
       include: {
@@ -187,7 +202,7 @@ export class EbookService {
     });
 
     const total = await this.prismaService.content.count({
-      where: { type: 'Ebook', ...filter },
+      where: { type: 'ebook', ...filter },
     });
 
     const data = await Promise.all(
@@ -221,7 +236,7 @@ export class EbookService {
 
   async findEbookByUuid(contentUuid: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { type: 'Ebook', uuid: contentUuid },
+      where: { type: 'ebook', uuid: contentUuid },
       include: {
         ebook: {
           include: {
@@ -238,7 +253,7 @@ export class EbookService {
   }
   async findEbookBySlug(slug: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { type: 'Ebook', slug },
+      where: { type: 'ebook', slug },
       include: {
         category: true,
         genre: true,
@@ -354,12 +369,12 @@ export class EbookService {
         },
         data: {
           file: file,
-          type: 'Ebook',
+          type: 'ebook',
         },
       });
 
       await prisma.content.update({
-        where: { uuid: contentUuid, type: 'Ebook' },
+        where: { uuid: contentUuid, type: 'ebook' },
         data: {
           title,
           thumbnail,

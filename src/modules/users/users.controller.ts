@@ -33,19 +33,19 @@ export class UserController {
   ) {}
 
   @Get(':uuid')
-  @Roles('Admin', 'User', 'Staff', 'Judge', 'Student')
+  @Roles('admin', 'User', 'staff', 'judge', 'student')
   async getUserByUuid(@Param('uuid') uuid: string) {
     return this.userService.findOne(uuid);
   }
 
   @Post('assign-role')
-  @Roles('Admin')
+  @Roles('admin')
   async assignRole(@Body() roleUserDto: RoleUserDto) {
     return this.userService.assignRoleToUser(roleUserDto);
   }
 
   @Post('remove-account')
-  @Roles('Admin', 'User', 'Student')
+  @Roles('admin', 'User', 'student')
   async removeUser(@Req() req: Request, @Res() res: Response) {
     const user = req.user;
     await this.userService.removeUser(user['sub']);
@@ -58,7 +58,7 @@ export class UserController {
   }
 
   @Post('update-profile/:uuid')
-  @Roles('Admin', 'User', 'Student', 'Staff')
+  @Roles('admin', 'User', 'student', 'staff')
   @UseInterceptors(FileInterceptor('profile'))
   @HttpCode(HttpStatus.OK)
   async updateProfile(
@@ -86,7 +86,7 @@ export class UserController {
   }
 
   @Get()
-  @Roles('Admin')
+  @Roles('admin')
   async getAllUsers() {
     return this.userService.findAll();
   }

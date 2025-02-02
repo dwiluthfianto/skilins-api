@@ -44,7 +44,7 @@ export class CategoryController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Category })
   @ApiConsumes('multipart/form-data')
@@ -53,22 +53,12 @@ export class CategoryController {
     @Body() createCategoryDto: CreateCategoryDto,
     @Res() res: Response,
   ) {
-    try {
-      const file = this.fileUploadService.handleFileUpload(avatar);
-      createCategoryDto.avatar = file.filePath;
-      const result =
-        await this.categoriesService.createCategory(createCategoryDto);
+    const file = this.fileUploadService.handleFileUpload(avatar);
+    createCategoryDto.avatar = file.filePath;
+    const result =
+      await this.categoriesService.createCategory(createCategoryDto);
 
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during category creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create category.',
-        detail: e.message,
-      });
-    }
+    return res.status(HttpStatus.CREATED).json(result);
   }
   @Get()
   @ApiOkResponse({ type: Category, isArray: true })
@@ -92,7 +82,7 @@ export class CategoryController {
 
   @Patch(':name')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Category })
   @ApiConsumes('multipart/form-data')
@@ -102,50 +92,34 @@ export class CategoryController {
     @Body() updateCategoryDto: UpdateCategoryDto,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.categoriesService.findCategoryByName(name);
+    const isExist = await this.categoriesService.findCategoryByName(name);
 
+    if (avatar && avatar.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.avatar,
         avatar,
       );
       updateCategoryDto.avatar = file.filePath;
-
-      const updatedCategory = await this.categoriesService.updateCategoryByName(
-        name,
-        updateCategoryDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedCategory);
-    } catch (error) {
-      console.error('Error updating category:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update category',
-        detail: error.message,
-      });
     }
+
+    const updatedCategory = await this.categoriesService.updateCategoryByName(
+      name,
+      updateCategoryDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedCategory);
   }
 
   @Delete(':name')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('staff')
   @ApiOkResponse({ type: Category })
   async remove(@Param('name') name: string, @Res() res: Response) {
-    try {
-      const isExist = await this.categoriesService.findCategoryByName(name);
-      this.fileUploadService.deleteFile(isExist.data.avatar);
+    const isExist = await this.categoriesService.findCategoryByName(name);
+    this.fileUploadService.deleteFile(isExist.data.avatar);
 
-      const category = await this.categoriesService.removeCategoryByName(name);
+    const category = await this.categoriesService.removeCategoryByName(name);
 
-      return res.status(HttpStatus.OK).json(category);
-    } catch (error) {
-      console.error('Error deleting category:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to delete category',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(category);
   }
 }

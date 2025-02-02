@@ -5,7 +5,8 @@
 
 # Kubernetes Configuration
 k8s/
-uploads/
+
+/uploads
 
 # Logs
 logs

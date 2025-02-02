@@ -21,8 +21,9 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EvaluateSubmissionDto } from '../dto/evaluate-submission.dto';
 import { UpdateJudgeDto } from '../dto/update-judge.dto';
 import { Request } from 'express';
+import { FindJudgeDto } from '../dto/find-judge.dto';
 
-@ApiTags('Judge')
+@ApiTags('judge')
 @ApiBearerAuth('JWT-auth')
 @Controller({ path: 'judges', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -30,24 +31,20 @@ export class JudgeController {
   constructor(private readonly judgeService: JudgeService) {}
 
   @Get()
-  @Roles('Staff')
+  @Roles('staff')
   @HttpCode(HttpStatus.OK)
-  async findAllJudges(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
-  ) {
-    return await this.judgeService.findAllJudges(page, limit, search);
+  async findAllJudges(@Query() query: FindJudgeDto) {
+    return await this.judgeService.findAllJudges(query);
   }
 
   @Post('add')
-  @Roles('Staff')
+  @Roles('staff')
   async registerJudge(@Body() registerJudgeDto: RegisterJudgeDto) {
     return await this.judgeService.regisNewJudge(registerJudgeDto);
   }
 
   @Patch(':judgeUuid')
-  @Roles('Staff')
+  @Roles('staff')
   async updateJudge(
     @Param('judgeUuid') judgeUuid: string,
     @Body() updateJudgeDto: UpdateJudgeDto,
@@ -56,13 +53,13 @@ export class JudgeController {
   }
 
   @Delete(':judgeUuid')
-  @Roles('Staff')
+  @Roles('staff')
   async removeJudge(@Param('judgeUuid') judgeUuid: string) {
     return await this.judgeService.removeJudge(judgeUuid);
   }
 
   @Patch(':judgeUuid/submission')
-  @Roles('Judge')
+  @Roles('judge')
   async evaluateSubmission(
     @Param('judgeUuid') judgeUuid: string,
     @Body() evaluateSubmissionDto: EvaluateSubmissionDto,
@@ -74,21 +71,21 @@ export class JudgeController {
   }
 
   @Get('scored/:competitionUuid')
-  @Roles('Judge')
+  @Roles('judge')
   @HttpCode(HttpStatus.OK)
   async scoredSubmission(@Param('competitionUuid') competitionUuid: string) {
     return await this.judgeService.getScoredSubmission(competitionUuid);
   }
 
   @Get('unscored/:competitionUuid')
-  @Roles('Judge')
+  @Roles('judge')
   @HttpCode(HttpStatus.OK)
   async unscoredSubmission(@Param('competitionUuid') competitionUuid: string) {
     return await this.judgeService.getUnscoredSubmission(competitionUuid);
   }
 
   @Get('detail')
-  @Roles('Judge')
+  @Roles('judge')
   @HttpCode(HttpStatus.OK)
   async summaryJudges(@Req() req: Request) {
     const user = req.user;
@@ -96,7 +93,7 @@ export class JudgeController {
   }
 
   @Get(':competitionUuid/evaluation-parameters')
-  @Roles('Judge')
+  @Roles('judge')
   @HttpCode(HttpStatus.OK)
   async getEvaluationParameters(
     @Param('competitionUuid') competitionUuid: string,

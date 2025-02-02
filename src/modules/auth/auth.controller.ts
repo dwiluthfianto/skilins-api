@@ -33,7 +33,7 @@ export class AuthController {
     @Body() authEmailLoginDto: AuthEmailLoginDto,
     @Res() res: Response,
   ) {
-    const { accessToken, refreshToken } =
+    const { accessToken, refreshToken, data } =
       await this.authService.login(authEmailLoginDto);
 
     res.cookie('refreshToken', refreshToken, {
@@ -47,6 +47,7 @@ export class AuthController {
     return res.send({
       status: 'success',
       message: 'Logged in successfully',
+      data,
       accessToken,
     });
   }

@@ -19,7 +19,7 @@ import { Request } from 'express';
 @Controller({ path: 'ratings', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @ApiBasicAuth('JWT-auth')
-@Roles('User', 'Staff', 'Student', 'Judge')
+@Roles('User', 'staff', 'student', 'judge')
 export class RatingController {
   constructor(private readonly ratingService: RatingService) {}
 

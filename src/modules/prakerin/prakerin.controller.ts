@@ -45,48 +45,43 @@ export class PrakerinController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @ApiCreatedResponse({
     type: Prakerin,
   })
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
+    FileFieldsInterceptor([
+      { name: 'thumbnail', maxCount: 1 },
+      { name: 'file', maxCount: 1 },
+    ]),
   )
   @ApiConsumes('multipart/form-data')
   async create(
     @UploadedFiles()
     files: {
-      thumbnail: Express.Multer.File;
-      file: Express.Multer.File;
+      thumbnail?: Express.Multer.File[];
+      file?: Express.Multer.File[];
     },
     @Body() createPrakerinDto: CreatePrakerinDto,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const thumbnail = this.fileUploadService.handleFileUpload(
-        files.thumbnail,
-      );
-      createPrakerinDto.thumbnail = thumbnail.filePath;
+    const thumbnail = this.fileUploadService.handleFileUpload(
+      files.thumbnail[0],
+    );
+    createPrakerinDto.thumbnail = thumbnail.filePath;
 
-      const file_prakerin = this.fileUploadService.handleFileUpload(files.file);
-      createPrakerinDto.file = file_prakerin.filePath;
+    const file_prakerin = this.fileUploadService.handleFileUpload(
+      files.file[0],
+    );
+    createPrakerinDto.file = file_prakerin.filePath;
 
-      const result = await this.prakerinService.createPrakerin(
-        user['sub'],
-        createPrakerinDto,
-      );
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during report podcast creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create prakerin.',
-        detail: e.message,
-      });
-    }
+    const result = await this.prakerinService.createPrakerin(
+      user['sub'],
+      createPrakerinDto,
+    );
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -105,7 +100,7 @@ export class PrakerinController {
     isArray: true,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @HttpCode(HttpStatus.OK)
   async findUserPrakerin(
     @Req() req: Request,
@@ -126,9 +121,12 @@ export class PrakerinController {
 
   @Patch(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
+    FileFieldsInterceptor([
+      { name: 'thumbnail', maxCount: 1 },
+      { name: 'file', maxCount: 1 },
+    ]),
   )
   @ApiOkResponse({
     type: Prakerin,
@@ -138,44 +136,39 @@ export class PrakerinController {
     @Param('uuid') uuid: string,
     @UploadedFiles()
     files: {
-      thumbnail: Express.Multer.File;
-      file: Express.Multer.File;
+      thumbnail?: Express.Multer.File[];
+      file?: Express.Multer.File[];
     },
     @Body() updatePrakerinDto: UpdatePrakerinDto,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const isExist = await this.prakerinService.findPrakerinByUuid(uuid);
+    const isExist = await this.prakerinService.findPrakerinByUuid(uuid);
 
+    if (files.thumbnail && files.thumbnail.length > 0) {
       const thumbnail = this.fileUploadService.updateFile(
         isExist.data.thumbnail,
-        files.thumbnail,
+        files.thumbnail[0],
       );
       updatePrakerinDto.thumbnail = thumbnail.filePath;
+    }
 
+    if (files.file && files.file.length > 0) {
       const file_prakerin = this.fileUploadService.updateFile(
         isExist.data.prakerin.file_attachment.file,
-        files.file,
+        files.file[0],
       );
       updatePrakerinDto.file = file_prakerin.filePath;
-
-      const updatedPrakerin = await this.prakerinService.updatePrakerinByUuid(
-        uuid,
-        user['sub'],
-        updatePrakerinDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedPrakerin);
-    } catch (error) {
-      console.error('Error updating prakerin:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update prakerin',
-        detail: error.message,
-      });
     }
+
+    const updatedPrakerin = await this.prakerinService.updatePrakerinByUuid(
+      uuid,
+      user['sub'],
+      updatePrakerinDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedPrakerin);
   }
 
   @Delete(':contentUuid')
@@ -189,25 +182,23 @@ export class PrakerinController {
     @Param('contentUuid') contentUuid: string,
     @Res() res: Response,
   ) {
-    try {
-      const isExist =
-        await this.prakerinService.findPrakerinByUuid(contentUuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
-      this.fileUploadService.deleteFile(
-        isExist.data.prakerin.file_attachment.file,
-      );
+    const isExist = await this.prakerinService.findPrakerinByUuid(contentUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    this.fileUploadService.deleteFile(
+      isExist.data.prakerin.file_attachment.file,
+    );
 
-      const prakerin =
-        await this.prakerinService.removePrakerinByUuid(contentUuid);
+    const prakerin =
+      await this.prakerinService.removePrakerinByUuid(contentUuid);
 
-      return res.status(HttpStatus.OK).json(prakerin);
-    } catch (error) {
-      console.error('Error updating prakerin:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove prakerin!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(prakerin);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryPrakerinStaff() {
+    return this.prakerinService.summaryPrakerinStaff();
   }
 }

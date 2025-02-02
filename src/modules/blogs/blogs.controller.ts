@@ -45,7 +45,7 @@ export class BlogController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiCreatedResponse({
     type: Blog,
   })
@@ -59,23 +59,13 @@ export class BlogController {
     @Body() createBlogDto: CreateBlogDto,
   ) {
     const user = req.user;
-    try {
-      const file = this.fileUploadService.handleFileUpload(thumbnail);
-      createBlogDto.thumbnail = file.filePath;
-      const result = await this.blogService.createBlog(
-        user['sub'],
-        createBlogDto,
-      );
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during Blog creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create blog.',
-        detail: e.message,
-      });
-    }
+    const file = this.fileUploadService.handleFileUpload(thumbnail);
+    createBlogDto.thumbnail = file.filePath;
+    const result = await this.blogService.createBlog(
+      user['sub'],
+      createBlogDto,
+    );
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -99,7 +89,7 @@ export class BlogController {
 
   @Patch(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({
     type: Blog,
   })
@@ -115,34 +105,27 @@ export class BlogController {
   ) {
     const user = req.user;
 
-    try {
-      const isExist = await this.blogService.findBlogByUuid(contentUuid);
+    const isExist = await this.blogService.findBlogByUuid(contentUuid);
+    if (thumbnail && thumbnail.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.thumbnail,
         thumbnail,
       );
       updateBlogDto.thumbnail = file.filePath;
-
-      const blog = await this.blogService.updateBlogByUuid(
-        user['sub'],
-        contentUuid,
-        updateBlogDto,
-      );
-
-      return res.status(HttpStatus.OK).json(blog);
-    } catch (error) {
-      console.error('Error updating blog:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update blog',
-        detail: error.message,
-      });
     }
+
+    const blog = await this.blogService.updateBlogByUuid(
+      user['sub'],
+      contentUuid,
+      updateBlogDto,
+    );
+
+    return res.status(HttpStatus.OK).json(blog);
   }
 
   @Delete(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({
     type: Blog,
   })
@@ -151,20 +134,11 @@ export class BlogController {
     @Param('contentUuid') contentUuid: string,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.blogService.findBlogByUuid(contentUuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    const isExist = await this.blogService.findBlogByUuid(contentUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
-      const blog = await this.blogService.removeBlogByUuid(contentUuid);
+    const blog = await this.blogService.removeBlogByUuid(contentUuid);
 
-      return res.status(HttpStatus.OK).json(blog);
-    } catch (error) {
-      console.error('Error updating blog:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove blog!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(blog);
   }
 }

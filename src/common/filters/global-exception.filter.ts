@@ -27,7 +27,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             if (targetField.includes('competition')) {
               message = 'Competition not found for this judge.';
             } else if (targetField.includes('student')) {
-              message = 'Student record not found.';
+              message = 'student record not found.';
             } else {
               message = 'Record not found or invalid UUID.';
             }
@@ -96,7 +96,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: ctx.getRequest().url,
       message,
-      details,
     };
 
     response.status(status).json(errorResponse);

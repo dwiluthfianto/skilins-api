@@ -41,7 +41,7 @@ export class StoryController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @UseInterceptors(FileInterceptor('thumbnail'))
-  @Roles('Student')
+  @Roles('student')
   @ApiConsumes('multipart/form-data')
   async createStory(
     @UploadedFile()
@@ -51,28 +51,15 @@ export class StoryController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const file = this.fileUploadService.handleFileUpload(thumbnail);
-      createStoryDto.thumbnail = file.filePath;
-      const result = await this.storyService.create(
-        user['sub'],
-        createStoryDto,
-      );
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during Blog creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create story.',
-        detail: e.message,
-      });
-    }
+    const file = this.fileUploadService.handleFileUpload(thumbnail);
+    createStoryDto.thumbnail = file.filePath;
+    const result = await this.storyService.create(user['sub'], createStoryDto);
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Post(':storyUuid/episodes')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   addEpisodeToStory(
     @Param('storyUuid') storyUuid: string,
     @Req() req: Request,
@@ -80,24 +67,14 @@ export class StoryController {
     @Body() addStoryEpisodeDto: AddStoryEpisodeDto,
   ) {
     const user = req.user;
-    try {
-      const authorUuid = user['sub'];
-      const result = this.storyService.addEpisode(
-        storyUuid,
-        authorUuid,
-        addStoryEpisodeDto,
-      );
+    const authorUuid = user['sub'];
+    const result = this.storyService.addEpisode(
+      storyUuid,
+      authorUuid,
+      addStoryEpisodeDto,
+    );
 
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during Blog creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create story.',
-        detail: e.message,
-      });
-    }
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -108,7 +85,7 @@ export class StoryController {
 
   @Get('student')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @HttpCode(HttpStatus.OK)
   async findUserStories(
     @Req() req: Request,
@@ -135,7 +112,7 @@ export class StoryController {
 
   @Patch('episodes/:episodeUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   updateEpisode(
     @Param('episodeUuid') episodeUuid: string,
     @Req() req: Request,
@@ -151,32 +128,73 @@ export class StoryController {
   }
   @Patch(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
-  updateStory(
+  @UseInterceptors(FileInterceptor('thumbnail'))
+  @Roles('student')
+  async updateStory(
     @Param('contentUuid') contentUuid: string,
+    @UploadedFile()
+    thumbnail: Express.Multer.File,
     @Req() req: Request,
+    @Res() res: Response,
     @Body() updateStoryDto: UpdateStoryDto,
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
-    return this.storyService.updateStory(
+
+    const isExist = await this.storyService.getStoryByUuid(contentUuid);
+
+    if (thumbnail && thumbnail.size > 0) {
+      const file = this.fileUploadService.updateFile(
+        isExist.data.thumbnail,
+        thumbnail,
+      );
+      updateStoryDto.thumbnail = file.filePath;
+    }
+
+    const updatedStory = this.storyService.updateStory(
       contentUuid,
       authorUuid,
       updateStoryDto,
     );
+
+    return res.status(HttpStatus.OK).json(updatedStory);
   }
 
   @Delete('episodes/:episodeUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student', 'Staff')
+  @Roles('student', 'staff')
   deleteEpisode(@Param('episodeUuid') episodeUuid: string) {
     return this.storyService.deleteEpisode(episodeUuid);
   }
 
   @Delete(':storyUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student', 'Staff')
-  deleteStory(@Param('storyUuid') storyUuid: string) {
-    return this.storyService.deleteStory(storyUuid);
+  @Roles('student', 'staff')
+  async deleteStory(
+    @Param('storyUuid') storyUuid: string,
+    @Res() res: Response,
+  ) {
+    const isExist = await this.storyService.getStoryByUuid(storyUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    const story = this.storyService.deleteStory(storyUuid);
+
+    return res.status(HttpStatus.OK).json(story);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  summaryStoryStudent(@Req() req: Request) {
+    const user = req.user;
+    return this.storyService.summaryStoryStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryStoryStaff() {
+    return this.storyService.summaryStoryStaff();
   }
 }

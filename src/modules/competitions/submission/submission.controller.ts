@@ -33,7 +33,7 @@ export class SubmissionController {
 
   @Patch(':submissionUuid/approve')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @HttpCode(HttpStatus.OK)
   approveSubmission(@Param('submissionUuid') submissionUuid: string) {
     return this.submissionService.approveSubmission(submissionUuid);
@@ -41,7 +41,7 @@ export class SubmissionController {
 
   @Patch(':submissionUuid/reject')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @HttpCode(HttpStatus.OK)
   rejectSubmission(@Param('submissionUuid') submissionUuid: string) {
     return this.submissionService.rejectSubmission(submissionUuid);
@@ -49,7 +49,7 @@ export class SubmissionController {
 
   @Post('submit')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @ApiCreatedResponse({
     type: Competition,
   })
@@ -81,19 +81,19 @@ export class SubmissionController {
       );
 
       switch (createSubmissionDto.type) {
-        case 'Audio':
+        case 'audio':
           createSubmissionDto.audioData.thumbnail = thumbnail.filePath;
           break;
-        case 'Video':
+        case 'video':
           createSubmissionDto.videoData.thumbnail = thumbnail.filePath;
           break;
-        case 'Prakerin':
+        case 'prakerin':
           createSubmissionDto.prakerinData.thumbnail = thumbnail.filePath;
           break;
       }
 
       switch (createSubmissionDto.type) {
-        case 'Audio':
+        case 'audio':
           const file_audio = this.fileUploadService.handleFileUpload(
             files.file,
           );
@@ -101,10 +101,10 @@ export class SubmissionController {
 
           break;
 
-        case 'Video':
+        case 'video':
           break;
 
-        case 'Prakerin':
+        case 'prakerin':
           const file_prakerin = this.fileUploadService.handleFileUpload(
             files.file,
           );

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { StoryService } from './stories.service';
 import { StoryController } from './stories.controller';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
@@ -9,7 +9,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   controllers: [StoryController],
-  providers: [StoryService, UuidHelper, SlugHelper, FileUploadService],
+  providers: [StoryService, UuidHelper, SlugHelper, FileUploadService, Logger],
   imports: [PrismaModule],
 })
 export class StoryModule {}

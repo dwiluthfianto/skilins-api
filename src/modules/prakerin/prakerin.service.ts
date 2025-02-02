@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -49,13 +50,13 @@ export class PrakerinService {
       const fileAttachment = await prisma.fileAttachment.create({
         data: {
           file: file,
-          type: 'Ebook',
+          type: 'ebook',
         },
       });
 
       await prisma.content.create({
         data: {
-          type: 'Prakerin',
+          type: 'prakerin',
           title,
           thumbnail,
           description,
@@ -89,7 +90,7 @@ export class PrakerinService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -121,7 +122,7 @@ export class PrakerinService {
     const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Prakerin',
+        type: 'prakerin',
         ...filter,
       },
       include: {
@@ -140,7 +141,7 @@ export class PrakerinService {
     });
 
     const total = await this.prismaService.content.count({
-      where: { type: 'Prakerin', ...filter },
+      where: { type: 'prakerin', ...filter },
     });
 
     const data = await Promise.all(
@@ -154,10 +155,6 @@ export class PrakerinService {
         const avg_rating = avgRatingResult._avg.rating_value || 0;
         return {
           ...content,
-          author: content.prakerin.creator.name,
-          major: content.prakerin.creator.major.name,
-          pages: content.prakerin.pages,
-          file_attachment: content.prakerin.file_attachment.file,
           avg_rating,
         };
       }),
@@ -205,7 +202,7 @@ export class PrakerinService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -238,23 +235,11 @@ export class PrakerinService {
     const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Prakerin',
+        type: 'prakerin',
         ...filter,
       },
       include: {
-        category: true,
-        tag: true,
-        rating: true,
-        prakerin: {
-          include: {
-            file_attachment: true,
-            creator: {
-              include: {
-                major: true,
-              },
-            },
-          },
-        },
+        prakerin: true,
       },
     });
 
@@ -270,15 +255,6 @@ export class PrakerinService {
         const avg_rating = avgRatingResult._avg.rating_value || 0;
         return {
           ...content,
-          tags: content.tag.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          category: content.category.name,
-          author: content.prakerin.creator.name,
-          major: content.prakerin.creator.major.name,
-          pages: content.prakerin.pages,
-          file_attachment: content.prakerin.file_attachment.file,
           avg_rating,
         };
       }),
@@ -298,7 +274,7 @@ export class PrakerinService {
 
   async findPrakerinByUuid(contentUuid: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { uuid: contentUuid, type: 'Prakerin' },
+      where: { uuid: contentUuid, type: 'prakerin' },
       include: {
         prakerin: {
           include: {
@@ -322,10 +298,9 @@ export class PrakerinService {
 
   async findPrakerinBySlug(slug: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { slug, type: 'Prakerin' },
+      where: { slug, type: 'prakerin' },
       include: {
         category: true,
-        genre: true,
         rating: true,
         tag: true,
         comment: {
@@ -363,20 +338,11 @@ export class PrakerinService {
       status: 'success',
       data: {
         ...content,
-        tags: content.tag.map((tag) => ({
+        tag: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        category: content.category.name,
-        author: content.prakerin.creator.name,
-        major: content.prakerin.creator.major.name,
-        pages: content.prakerin.pages,
-        file_attachment: content.prakerin.file_attachment.file,
-        genres: content.genre?.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comments: content.comment.map((comment) => ({
+        comment: content.comment.map((comment) => ({
           ...comment,
           commented_by_uuid: comment.user.uuid,
           commented_by: comment.user.full_name,
@@ -433,12 +399,12 @@ export class PrakerinService {
         },
         data: {
           file: file,
-          type: 'Prakerin',
+          type: 'prakerin',
         },
       });
 
       await prisma.content.update({
-        where: { uuid: contentUuid, type: 'Prakerin' },
+        where: { uuid: contentUuid, type: 'prakerin' },
         data: {
           title,
           thumbnail,
@@ -480,5 +446,25 @@ export class PrakerinService {
     });
 
     return res;
+  }
+
+  async summaryPrakerinStaff() {
+    const res = await this.prismaService.prakerin.findMany({
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
   }
 }

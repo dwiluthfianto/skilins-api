@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { SexType } from '@prisma/client';
 
-export class Student {
+export class student {
   @ApiProperty({ example: '123456', type: String })
   nis: string;
 

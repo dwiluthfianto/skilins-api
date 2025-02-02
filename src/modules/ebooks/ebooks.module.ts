@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { EbookService } from './ebooks.service';
 import { EbookController } from './ebooks.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
@@ -9,7 +9,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   controllers: [EbookController],
-  providers: [EbookService, UuidHelper, SlugHelper, FileUploadService],
+  providers: [EbookService, UuidHelper, SlugHelper, FileUploadService, Logger],
   imports: [PrismaModule],
 })
 export class EbookModule {}

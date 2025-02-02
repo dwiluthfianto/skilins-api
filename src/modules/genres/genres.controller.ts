@@ -44,7 +44,7 @@ export class GenreController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Genre })
   @ApiConsumes('multipart/form-data')
@@ -54,20 +54,10 @@ export class GenreController {
     @Body() createGenreDto: CreateGenreDto,
     @Res() res: Response,
   ) {
-    try {
-      const file = this.fileUploadService.handleFileUpload(avatar);
-      createGenreDto.avatar = file.filePath;
-      const result = await this.genreService.createGenre(createGenreDto);
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during genre creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create genre.',
-        detail: e.message,
-      });
-    }
+    const file = this.fileUploadService.handleFileUpload(avatar);
+    createGenreDto.avatar = file.filePath;
+    const result = await this.genreService.createGenre(createGenreDto);
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -92,7 +82,7 @@ export class GenreController {
 
   @Patch(':genreUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
@@ -102,48 +92,32 @@ export class GenreController {
     @Body() updateGenreDto: UpdateGenreDto,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.genreService.findGenreByUuid(genreUuid);
+    const isExist = await this.genreService.findGenreByUuid(genreUuid);
+    if (avatar && avatar.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.avatar,
         avatar,
       );
       updateGenreDto.avatar = file.filePath;
-      const genre = await this.genreService.updateGenreByUuid(
-        genreUuid,
-        updateGenreDto,
-      );
-
-      return res.status(HttpStatus.OK).json(genre);
-    } catch (error) {
-      console.error('Error updating genre:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update genre',
-        detail: error.message,
-      });
     }
+    const genre = await this.genreService.updateGenreByUuid(
+      genreUuid,
+      updateGenreDto,
+    );
+
+    return res.status(HttpStatus.OK).json(genre);
   }
 
   @Delete(':genreUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('genreUuid') genreUuid: string, @Res() res: Response) {
-    try {
-      const isExist = await this.genreService.findGenreByUuid(genreUuid);
-      this.fileUploadService.deleteFile(isExist.data.avatar);
+    const isExist = await this.genreService.findGenreByUuid(genreUuid);
+    this.fileUploadService.deleteFile(isExist.data.avatar);
 
-      const result = await this.genreService.removeGenreByUuid(genreUuid);
-      return res.status(HttpStatus.OK).json(result);
-    } catch (error) {
-      console.error('Error updating genre:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove genre!',
-        detail: error.message,
-      });
-    }
+    const result = await this.genreService.removeGenreByUuid(genreUuid);
+    return res.status(HttpStatus.OK).json(result);
   }
 }

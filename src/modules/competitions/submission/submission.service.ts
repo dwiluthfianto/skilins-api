@@ -37,16 +37,16 @@ export class SubmissionService {
 
       let content;
 
-      if (type === ContentType.Audio && audioData) {
+      if (type === ContentType.audio && audioData) {
         content = await this.audioPodcastService.createAudioPodcast(
           userUuid,
           audioData,
         );
       }
-      if (type === ContentType.Video && videoData) {
+      if (type === ContentType.video && videoData) {
         content = await this.videoPodcastService.create(userUuid, videoData);
       }
-      if (type === ContentType.Prakerin && prakerinData) {
+      if (type === ContentType.prakerin && prakerinData) {
         content = await this.prakerinService.createPrakerin(
           userUuid,
           prakerinData,
@@ -119,7 +119,7 @@ export class SubmissionService {
     );
     return this.contentService.updateContentStatus(
       submission.content.uuid,
-      ContentStatus.Approved,
+      ContentStatus.approved,
     );
   }
 
@@ -149,7 +149,7 @@ export class SubmissionService {
     this.logger.log(`Approved Submission sent to ${submission.student.name}`);
     return this.contentService.updateContentStatus(
       submission.content.uuid,
-      ContentStatus.Rejected,
+      ContentStatus.rejected,
     );
   }
 }

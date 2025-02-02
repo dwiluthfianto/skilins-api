@@ -45,7 +45,7 @@ export class EbookController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiCreatedResponse({
     type: Ebook,
   })
@@ -65,26 +65,16 @@ export class EbookController {
     @Body() createEbookDto: CreateEbookDto,
     @Res() res: Response,
   ) {
-    try {
-      const thumbnail = this.fileUploadService.handleFileUpload(
-        files.thumbnail[0],
-      );
-      createEbookDto.thumbnail = thumbnail.filePath;
+    const thumbnail = this.fileUploadService.handleFileUpload(
+      files.thumbnail[0],
+    );
+    createEbookDto.thumbnail = thumbnail.filePath;
 
-      const file = this.fileUploadService.handleFileUpload(files.file[0]);
-      createEbookDto.file = file.filePath;
+    const file = this.fileUploadService.handleFileUpload(files.file[0]);
+    createEbookDto.file = file.filePath;
 
-      const result = await this.ebookService.create(createEbookDto);
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during ebook creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create ebook.',
-        detail: e.message,
-      });
-    }
+    const result = await this.ebookService.create(createEbookDto);
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -108,7 +98,7 @@ export class EbookController {
 
   @Patch(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({
     type: Ebook,
   })
@@ -129,40 +119,35 @@ export class EbookController {
     @Body() updateEbookDto: UpdateEbookDto,
     @Res() res: Response,
   ) {
-    try {
-      const currentEbook = await this.ebookService.findEbookByUuid(contentUuid);
+    const currentEbook = await this.ebookService.findEbookByUuid(contentUuid);
 
+    if (files.thumbnail && files.thumbnail.length > 0) {
       const thumbnail = this.fileUploadService.updateFile(
         currentEbook.data.thumbnail,
         files.thumbnail[0],
       );
       updateEbookDto.thumbnail = thumbnail.filePath;
+    }
 
+    if (files.file && files.file.length > 0) {
       const file = this.fileUploadService.updateFile(
         currentEbook.data.ebook.file_attachment.file,
         files.file[0],
       );
       updateEbookDto.file = file.filePath;
-
-      const updatedEbook = await this.ebookService.updateEbookByUuid(
-        contentUuid,
-        updateEbookDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedEbook);
-    } catch (error) {
-      console.error('Error updating ebook:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update ebook',
-        detail: error.message,
-      });
     }
+
+    const updatedEbook = await this.ebookService.updateEbookByUuid(
+      contentUuid,
+      updateEbookDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedEbook);
   }
 
   @Delete(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({
     type: Ebook,
   })
@@ -171,23 +156,12 @@ export class EbookController {
     @Param('contentUuid') contentUuid: string,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.ebookService.findEbookByUuid(contentUuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
-      this.fileUploadService.deleteFile(
-        isExist.data.ebook.file_attachment.file,
-      );
+    const isExist = await this.ebookService.findEbookByUuid(contentUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    this.fileUploadService.deleteFile(isExist.data.ebook.file_attachment.file);
 
-      const audio = await this.ebookService.removeEbookByUuid(contentUuid);
+    const audio = await this.ebookService.removeEbookByUuid(contentUuid);
 
-      return res.status(HttpStatus.OK).json(audio);
-    } catch (error) {
-      console.error('Error updating audio:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove audio!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(audio);
   }
 }

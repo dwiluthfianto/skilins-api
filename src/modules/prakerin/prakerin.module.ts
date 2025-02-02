@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { PrakerinService } from './prakerin.service';
 import { PrakerinController } from './prakerin.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
@@ -9,7 +9,13 @@ import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   controllers: [PrakerinController],
-  providers: [PrakerinService, UuidHelper, SlugHelper, FileUploadService],
+  providers: [
+    PrakerinService,
+    UuidHelper,
+    SlugHelper,
+    FileUploadService,
+    Logger,
+  ],
   imports: [PrismaModule],
 })
 export class PrakerinModule {}

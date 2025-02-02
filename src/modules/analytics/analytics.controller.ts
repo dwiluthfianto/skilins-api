@@ -9,7 +9,7 @@ import { Roles } from '../roles/roles.decorator';
 @ApiBasicAuth('JWT-auth')
 @Controller({ path: 'analytics', version: '1' })
 @UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles('Staff')
+@Roles('staff')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 

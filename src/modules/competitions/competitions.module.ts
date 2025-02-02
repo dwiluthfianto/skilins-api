@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { CompetitionService } from './competitions.service';
 import { CompetitionController } from './competitions.controller';
 import { PrismaModule } from 'src/prisma/prisma.module';
@@ -30,6 +30,7 @@ import { FileUploadService } from '../file-upload/file-upload.service';
     SubmissionService,
     JudgeService,
     FileUploadService,
+    Logger,
   ],
   imports: [
     ConfigModule.forRoot({

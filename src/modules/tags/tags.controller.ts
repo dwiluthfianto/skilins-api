@@ -44,7 +44,7 @@ export class TagController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiCreatedResponse({ type: Tag })
   @ApiConsumes('multipart/form-data')
@@ -54,21 +54,11 @@ export class TagController {
     @Body() createTagDto: CreateTagDto,
     @Res() res: Response,
   ) {
-    try {
-      const file = this.fileUploadService.handleFileUpload(avatar);
-      createTagDto.avatar = file.filePath;
-      const result = await this.tagService.create(createTagDto);
+    const file = this.fileUploadService.handleFileUpload(avatar);
+    createTagDto.avatar = file.filePath;
+    const result = await this.tagService.create(createTagDto);
 
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during tag creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create tag.',
-        detail: e.message,
-      });
-    }
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -93,7 +83,7 @@ export class TagController {
 
   @Patch(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiOkResponse({ type: Tag })
   async update(
@@ -103,45 +93,30 @@ export class TagController {
     @Body() updateTagDto: UpdateTagDto,
     @Res() res: Response,
   ) {
-    try {
-      const isExist = await this.tagService.findOneByUuid(uuid);
+    const isExist = await this.tagService.findOneByUuid(uuid);
+
+    if (avatar && avatar.size > 0) {
       const file = this.fileUploadService.updateFile(
         isExist.data.avatar,
         avatar,
       );
       updateTagDto.avatar = file.filePath;
-      const tag = await this.tagService.update(uuid, updateTagDto);
-
-      return res.status(HttpStatus.OK).json(tag);
-    } catch (error) {
-      console.error('Error updating genre:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update genre',
-        detail: error.message,
-      });
     }
+    const tag = await this.tagService.update(uuid, updateTagDto);
+
+    return res.status(HttpStatus.OK).json(tag);
   }
 
   @Delete(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff')
+  @Roles('staff')
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('uuid') uuid: string, @Res() res: Response) {
-    try {
-      const isExist = await this.tagService.findOneByUuid(uuid);
-      this.fileUploadService.deleteFile(isExist.data.avatar);
+    const isExist = await this.tagService.findOneByUuid(uuid);
+    this.fileUploadService.deleteFile(isExist.data.avatar);
 
-      const result = await this.tagService.remove(uuid);
-      return res.status(HttpStatus.OK).json(result);
-    } catch (error) {
-      console.error('Error updating tag:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove tag!',
-        detail: error.message,
-      });
-    }
+    const result = await this.tagService.remove(uuid);
+    return res.status(HttpStatus.OK).json(result);
   }
 }

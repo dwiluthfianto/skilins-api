@@ -42,13 +42,13 @@ export class StoryService {
 
       if (!userData) {
         throw new NotFoundException(
-          'Student not found, please make sure you input correct student',
+          'student not found, please make sure you input correct student',
         );
       }
 
       await prisma.content.create({
         data: {
-          type: 'Story',
+          type: 'story',
           title,
           thumbnail,
           description,
@@ -98,7 +98,7 @@ export class StoryService {
   ) {
     const res = await this.prismaService.$transaction(async (prisma) => {
       const content = await this.prismaService.content.findUniqueOrThrow({
-        where: { type: 'Story', uuid: storyUuid },
+        where: { type: 'story', uuid: storyUuid },
         include: {
           story: true,
         },
@@ -139,7 +139,7 @@ export class StoryService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -211,19 +211,8 @@ export class StoryService {
     const story = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Story',
+        type: 'story',
         ...filter,
-      },
-      include: {
-        category: true,
-        tag: true,
-        genre: true,
-        rating: true,
-        story: {
-          include: {
-            creator: true,
-          },
-        },
       },
     });
 
@@ -241,16 +230,6 @@ export class StoryService {
 
         return {
           ...story,
-          tags: story.tag.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          genres: story.genre.map((genre) => ({
-            id: genre.uuid,
-            text: genre.name,
-          })),
-          category: story.category.name,
-          creator: story.story.creator.name || null,
           avg_rating,
         };
       }),
@@ -297,7 +276,7 @@ export class StoryService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -370,19 +349,8 @@ export class StoryService {
     const story = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Story',
+        type: 'story',
         ...filter,
-      },
-      include: {
-        category: true,
-        tag: true,
-        genre: true,
-        rating: true,
-        story: {
-          include: {
-            creator: true,
-          },
-        },
       },
     });
 
@@ -400,16 +368,6 @@ export class StoryService {
 
         return {
           ...story,
-          tags: story.tag.map((tag) => ({
-            id: tag.uuid,
-            text: tag.name,
-          })),
-          genres: story.genre.map((genre) => ({
-            id: genre.uuid,
-            text: genre.name,
-          })),
-          category: story.category.name,
-          creator: story.story.creator.name || null,
           avg_rating,
         };
       }),
@@ -427,9 +385,26 @@ export class StoryService {
     };
   }
 
+  async getStoryByUuid(contentUuid: string) {
+    const content = await this.prismaService.content.findUnique({
+      where: { type: 'story', uuid: contentUuid },
+    });
+
+    if (!content) {
+      throw new NotFoundException(
+        'Story not found, please make sure you input correct story',
+      );
+    }
+
+    return {
+      status: 'success',
+      data: content,
+    };
+  }
+
   async getStoryBySlug(slug: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { type: 'Story', slug },
+      where: { type: 'story', slug },
       include: {
         category: true,
         genre: true,
@@ -467,31 +442,16 @@ export class StoryService {
     return {
       status: 'success',
       data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        status: content.status,
-        tags: content.tag.map((tag) => ({
+        ...content,
+        tag: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        created_at: content.created_at,
-        updated_at: content.updated_at,
-        category: content.category.name,
-        creator: content.story.creator.name,
-        episode: content.story.episode.map((episode) => ({
-          uuid: episode.uuid,
-          title: episode.title,
-          order: episode.order,
-          created_at: episode.created_at,
-        })),
-        genres: content.genre.map((genre) => ({
+        genre: content.genre.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),
-        comments: content.comment.map((comment) => ({
+        comment: content.comment.map((comment) => ({
           ...comment,
           commented_by_uuid: comment.user.uuid,
           commented_by: comment.user.full_name,
@@ -505,14 +465,14 @@ export class StoryService {
   async getOneEpisode(slugStory: string, order: number) {
     const story = await this.prismaService.content.findUnique({
       where: {
-        type: 'Story',
+        type: 'story',
         slug: slugStory,
       },
     });
 
     if (!story) {
       throw new NotFoundException(
-        'Audio not found, please make sure you input correct audio',
+        'Story not found, please make sure you input correct story',
       );
     }
     const episode = await this.prismaService.episode.findFirst({
@@ -531,7 +491,7 @@ export class StoryService {
   async getEpisode(slugStory: string, order: number) {
     const content = await this.prismaService.content.findUniqueOrThrow({
       where: {
-        type: 'Story',
+        type: 'story',
         slug: slugStory,
         story: {
           episode: {
@@ -587,44 +547,36 @@ export class StoryService {
     return {
       status: 'success',
       data: {
-        uuid: content.uuid,
-        thumbnail: content.thumbnail,
-        title: content.title,
-        description: content.description,
-        slug: content.slug,
-        tags: content.tag.map((tag) => ({
+        ...content,
+        tag: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        created_at: content.created_at,
-        updated_at: content.updated_at,
-        category: content.category.name,
-        creator: content.story.creator.name,
         episode: {
           uuid: content.story.episode[currentEpisodeIndex].uuid,
           title: content.story.episode[currentEpisodeIndex].title,
           content: content.story.episode[currentEpisodeIndex].content,
           order: content.story.episode[currentEpisodeIndex].order,
         },
-        nextEpisode: nextEpisode
+        next_episode: nextEpisode
           ? {
               uuid: nextEpisode.uuid,
               title: nextEpisode.title,
               order: nextEpisode.order,
             }
           : null,
-        prevEpisode: prevEpisode
+        prev_episode: prevEpisode
           ? {
               uuid: prevEpisode.uuid,
               title: prevEpisode.title,
               order: prevEpisode.order,
             }
           : null,
-        genres: content.genre?.map((genre) => ({
+        genre: content.genre?.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),
-        comments: content.comment.map((comment) => ({
+        comment: content.comment.map((comment) => ({
           ...comment,
           commented_by_uuid: comment.user.uuid,
           commented_by: comment.user.full_name,
@@ -645,7 +597,7 @@ export class StoryService {
 
     const res = await this.prismaService.$transaction(async (prisma) => {
       const content = await prisma.content.findUniqueOrThrow({
-        where: { type: 'Story', uuid: contentUuid },
+        where: { type: 'story', uuid: contentUuid },
         include: {
           story: {
             include: {
@@ -668,7 +620,7 @@ export class StoryService {
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
       await prisma.content.update({
-        where: { uuid: contentUuid, type: 'Story' },
+        where: { uuid: contentUuid, type: 'story' },
         data: {
           title,
           thumbnail,
@@ -787,5 +739,67 @@ export class StoryService {
     });
 
     return res;
+  }
+
+  async summaryStoryStudent(userUuid: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { uuid: userUuid },
+      include: {
+        student: true,
+      },
+    });
+
+    const student = await this.prismaService.student.findUnique({
+      where: {
+        uuid: user.student.uuid,
+      },
+    });
+
+    if (!student) {
+      throw new ForbiddenException(
+        "You don't have access to see this summary!",
+      );
+    }
+
+    const res = await this.prismaService.story.findMany({
+      where: {
+        creator_id: student.id,
+      },
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
+  }
+
+  async summaryStoryStaff() {
+    const res = await this.prismaService.story.findMany({
+      include: {
+        content: true,
+      },
+    });
+
+    const counter = res.reduce(
+      (acc, item) => {
+        acc[item.content.status] = (acc[item.content.status] || 0) + 1;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 },
+    );
+
+    return {
+      counter,
+    };
   }
 }

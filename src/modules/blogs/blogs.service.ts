@@ -38,11 +38,11 @@ export class BlogService {
       }
       await prisma.content.create({
         data: {
-          type: 'Blog',
+          type: 'blog',
           title,
           thumbnail,
           description,
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           tag: {
             connectOrCreate: parsedTags?.map((tag) => ({
               where: {
@@ -85,7 +85,7 @@ export class BlogService {
 
     const latestFilter = latest
       ? {
-          status: ContentStatus.Approved,
+          status: ContentStatus.approved,
           created_at: {
             gte: twoMonthsAgo,
             lte: currentDate,
@@ -131,7 +131,7 @@ export class BlogService {
     const blogs = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
-        type: 'Blog',
+        type: 'blog',
         ...filter,
       },
       include: {
@@ -140,7 +140,7 @@ export class BlogService {
     });
 
     const total = await this.prismaService.content.count({
-      where: { type: 'Blog', ...filter },
+      where: { type: 'blog', ...filter },
     });
 
     const data = await Promise.all(
@@ -174,7 +174,7 @@ export class BlogService {
 
   async findBlogByUuid(contentUuid: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { type: 'Blog', uuid: contentUuid },
+      where: { type: 'blog', uuid: contentUuid },
       include: {
         blog: {
           include: {
@@ -198,7 +198,7 @@ export class BlogService {
 
   async findBlogBySlug(slug: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
-      where: { type: 'Blog', slug },
+      where: { type: 'blog', slug },
       include: {
         tag: true,
         category: true,
@@ -269,7 +269,7 @@ export class BlogService {
       await prisma.content.update({
         where: {
           uuid: content.uuid,
-          type: 'Blog',
+          type: 'blog',
         },
         data: {
           title,

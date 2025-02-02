@@ -1,14 +1,14 @@
 -- CreateEnum
-CREATE TYPE "RoleType" AS ENUM ('Admin', 'Student', 'User', 'Staff', 'Judge');
+CREATE TYPE "RoleType" AS ENUM ('admin', 'student', 'user', 'staff', 'judge');
 
 -- CreateEnum
-CREATE TYPE "ContentType" AS ENUM ('Ebook', 'Video', 'Audio', 'Story', 'Prakerin', 'Blog');
+CREATE TYPE "ContentType" AS ENUM ('ebook', 'video', 'audio', 'story', 'prakerin', 'blog');
 
 -- CreateEnum
-CREATE TYPE "ContentStatus" AS ENUM ('Pending', 'Approved', 'Rejected');
+CREATE TYPE "ContentStatus" AS ENUM ('pending', 'approved', 'rejected');
 
 -- CreateEnum
-CREATE TYPE "SexType" AS ENUM ('Male', 'Female');
+CREATE TYPE "SexType" AS ENUM ('male', 'female');
 
 -- CreateTable
 CREATE TABLE "user" (
@@ -33,7 +33,7 @@ CREATE TABLE "user" (
 CREATE TABLE "role" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "name" "RoleType" NOT NULL DEFAULT 'User',
+    "name" "RoleType" NOT NULL DEFAULT 'user',
 
     CONSTRAINT "role_pkey" PRIMARY KEY ("id")
 );
@@ -75,7 +75,7 @@ CREATE TABLE "content" (
     "thumbnail" TEXT NOT NULL,
     "description" TEXT,
     "slug" TEXT NOT NULL,
-    "status" "ContentStatus" NOT NULL DEFAULT 'Pending',
+    "status" "ContentStatus" NOT NULL DEFAULT 'pending',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "category_id" INTEGER NOT NULL,
@@ -91,8 +91,8 @@ CREATE TABLE "file_attachment" (
     "type" "ContentType" NOT NULL,
     "size" INTEGER,
     "mimeType" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "file_attachment_pkey" PRIMARY KEY ("id")
 );
@@ -134,7 +134,7 @@ CREATE TABLE "genre" (
 CREATE TABLE "video_podcast" (
     "id" SERIAL NOT NULL,
     "uuid" TEXT NOT NULL,
-    "file_id" INTEGER NOT NULL,
+    "link" TEXT NOT NULL,
     "creator_id" INTEGER NOT NULL,
     "content_id" INTEGER NOT NULL,
 
@@ -330,13 +330,17 @@ CREATE TABLE "major" (
 -- CreateTable
 CREATE TABLE "_ContentToGenre" (
     "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_ContentToGenre_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateTable
 CREATE TABLE "_ContentToTag" (
     "A" INTEGER NOT NULL,
-    "B" INTEGER NOT NULL
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_ContentToTag_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateIndex
@@ -550,13 +554,7 @@ CREATE UNIQUE INDEX "major_name_key" ON "major"("name");
 CREATE INDEX "major_uuid_idx" ON "major"("uuid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_ContentToGenre_AB_unique" ON "_ContentToGenre"("A", "B");
-
--- CreateIndex
 CREATE INDEX "_ContentToGenre_B_index" ON "_ContentToGenre"("B");
-
--- CreateIndex
-CREATE UNIQUE INDEX "_ContentToTag_AB_unique" ON "_ContentToTag"("A", "B");
 
 -- CreateIndex
 CREATE INDEX "_ContentToTag_B_index" ON "_ContentToTag"("B");
@@ -590,9 +588,6 @@ ALTER TABLE "video_podcast" ADD CONSTRAINT "video_podcast_creator_id_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "video_podcast" ADD CONSTRAINT "video_podcast_content_id_fkey" FOREIGN KEY ("content_id") REFERENCES "content"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "video_podcast" ADD CONSTRAINT "video_podcast_file_id_fkey" FOREIGN KEY ("file_id") REFERENCES "file_attachment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "audio_podcast" ADD CONSTRAINT "audio_podcast_creator_id_fkey" FOREIGN KEY ("creator_id") REFERENCES "student"("id") ON DELETE CASCADE ON UPDATE CASCADE;

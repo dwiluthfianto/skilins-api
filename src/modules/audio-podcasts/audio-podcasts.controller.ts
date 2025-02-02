@@ -45,7 +45,7 @@ export class AudioPodcastController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @ApiCreatedResponse({
     type: AudioPodcast,
   })
@@ -67,29 +67,19 @@ export class AudioPodcastController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const thumbnail = this.fileUploadService.handleFileUpload(
-        files.thumbnail[0],
-      );
-      createAudioPodcastDto.thumbnail = thumbnail.filePath;
+    const thumbnail = this.fileUploadService.handleFileUpload(
+      files.thumbnail[0],
+    );
+    createAudioPodcastDto.thumbnail = thumbnail.filePath;
 
-      const file = this.fileUploadService.handleFileUpload(files.file[0]);
-      createAudioPodcastDto.file = file.filePath;
+    const file = this.fileUploadService.handleFileUpload(files.file[0]);
+    createAudioPodcastDto.file = file.filePath;
 
-      const result = await this.audioPodcastService.createAudioPodcast(
-        user['sub'],
-        createAudioPodcastDto,
-      );
-      return res.status(HttpStatus.CREATED).json(result);
-    } catch (e) {
-      console.error('Error during audio podcast creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create audio podcast.',
-        detail: e.message,
-      });
-    }
+    const result = await this.audioPodcastService.createAudioPodcast(
+      user['sub'],
+      createAudioPodcastDto,
+    );
+    return res.status(HttpStatus.CREATED).json(result);
   }
 
   @Get()
@@ -108,7 +98,7 @@ export class AudioPodcastController {
     isArray: true,
   })
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Student')
+  @Roles('student')
   @HttpCode(HttpStatus.OK)
   findUserAudio(@Req() req: Request, @Query() query: FindContentQueryDto) {
     const user = req.user;
@@ -132,7 +122,7 @@ export class AudioPodcastController {
     ]),
   )
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @ApiOkResponse({
     type: AudioPodcast,
   })
@@ -149,42 +139,37 @@ export class AudioPodcastController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    try {
-      const currentAudio =
-        await this.audioPodcastService.findAudioByUuid(contentUuid);
+    const currentAudio =
+      await this.audioPodcastService.findAudioByUuid(contentUuid);
 
+    if (files.thumbnail && files.thumbnail.length > 0) {
       const thumbnail = this.fileUploadService.updateFile(
         currentAudio.data.thumbnail,
         files.thumbnail[0],
       );
       updateAudioPodcastDto.thumbnail = thumbnail.filePath;
+    }
 
+    if (files.file && files.file.length > 0) {
       const file = this.fileUploadService.updateFile(
         currentAudio.data.audio_podcast.file_attachment.file,
         files.file[0],
       );
       updateAudioPodcastDto.file = file.filePath;
-
-      const updatedAudio = await this.audioPodcastService.updateAudioByUuid(
-        contentUuid,
-        user['sub'],
-        updateAudioPodcastDto,
-      );
-
-      return res.status(HttpStatus.OK).json(updatedAudio);
-    } catch (error) {
-      console.error('Error updating audio:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update audio!',
-        detail: error.message,
-      });
     }
+
+    const updatedAudio = await this.audioPodcastService.updateAudioByUuid(
+      contentUuid,
+      user['sub'],
+      updateAudioPodcastDto,
+    );
+
+    return res.status(HttpStatus.OK).json(updatedAudio);
   }
 
   @Delete(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('Staff', 'Student')
+  @Roles('staff', 'student')
   @ApiOkResponse({
     type: AudioPodcast,
   })
@@ -193,25 +178,31 @@ export class AudioPodcastController {
     @Param('contentUuid') contentUuid: string,
     @Res() res: Response,
   ) {
-    try {
-      const isExist =
-        await this.audioPodcastService.findAudioByUuid(contentUuid);
-      this.fileUploadService.deleteFile(isExist.data.thumbnail);
-      this.fileUploadService.deleteFile(
-        isExist.data.audio_podcast.file_attachment.file,
-      );
+    const isExist = await this.audioPodcastService.findAudioByUuid(contentUuid);
+    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    this.fileUploadService.deleteFile(
+      isExist.data.audio_podcast.file_attachment.file,
+    );
 
-      const audio =
-        await this.audioPodcastService.removeAudioByUuid(contentUuid);
+    const audio = await this.audioPodcastService.removeAudioByUuid(contentUuid);
 
-      return res.status(HttpStatus.OK).json(audio);
-    } catch (error) {
-      console.error('Error updating audio:', error.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to remove audio!',
-        detail: error.message,
-      });
-    }
+    return res.status(HttpStatus.OK).json(audio);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  summaryAudioStudent(@Req() req: Request) {
+    const user = req.user;
+    return this.audioPodcastService.summaryAudioStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryAudioStaff() {
+    return this.audioPodcastService.summaryAudioStaff();
   }
 }
