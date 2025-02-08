@@ -4,10 +4,13 @@ import { UpdateBlogDto } from './dto/update-blog.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import { ContentStatus, Prisma } from '@prisma/client';
+import { ContentStatus } from '@prisma/client';
 import parseArrayInput from 'src/common/utils/parse-array';
-import { subMonths } from 'date-fns';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
+import {
+  contentFilter,
+  contentFilterByUser,
+} from 'src/common/utils/filter/content-filter';
 
 @Injectable()
 export class BlogService {
@@ -76,57 +79,59 @@ export class BlogService {
     return res;
   }
 
-  async findAllBlog(findBlogQueryDto: FindBlogQueryDto) {
-    const { page, limit, tag, search, status, latest } = findBlogQueryDto;
+  async findAllBlogByUser(findBlogQueryDto: FindBlogQueryDto) {
+    const { page, limit, tag, search, latest } = findBlogQueryDto;
 
-    const currentDate = new Date();
+    const filter = contentFilterByUser({ tag, search, latest });
 
-    const twoMonthsAgo = subMonths(currentDate, 2);
+    const blogs = await this.prismaService.content.findMany({
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+      where: {
+        type: 'blog',
+        ...filter,
+      },
+      include: {
+        rating: true,
+      },
+    });
 
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
+    const total = await this.prismaService.content.count({
+      where: { type: 'blog', ...filter },
+    });
+
+    const data = await Promise.all(
+      blogs.map(async (blog) => {
+        const avgRatingResult = await this.prismaService.rating.aggregate({
+          where: { content_id: blog.id },
+          _avg: {
+            rating_value: true,
           },
-        }
-      : {};
+        });
+        const avg_rating = avgRatingResult._avg.rating_value || 0;
 
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
+        return {
+          ...blog,
+          avg_rating,
+        };
+      }),
+    );
+
+    return {
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
       },
     };
+  }
 
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
+  async findAllBlogByStaff(findBlogQueryDto: FindBlogQueryDto) {
+    const { page, limit, tag, search, status, latest } = findBlogQueryDto;
 
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...tagFilter,
-    };
+    const filter = contentFilter({ tag, search, latest, status });
 
     const blogs = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),

@@ -8,6 +8,7 @@ import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
 import parseArrayInput from 'src/common/utils/parse-array';
 import { ContentStatus, ContentType, Prisma } from '@prisma/client';
 import { FindCompetitionDto } from './dto/find-competition.dto';
+import competitionFilter from 'src/common/utils/filter/competition-filter';
 
 @Injectable()
 export class CompetitionService {
@@ -147,38 +148,8 @@ export class CompetitionService {
 
   async findAllCompetition(query: FindCompetitionDto) {
     const { page, limit, type, title, status } = query;
-    const filterTitle = {
-      title: {
-        contains: title,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
 
-    const filterType = type
-      ? {
-          type: {
-            equals: type.toUpperCase() as ContentType,
-          },
-        }
-      : {};
-
-    const filterStatus = status
-      ? {
-          end_date: {
-            gte: new Date(),
-          },
-        }
-      : {
-          end_date: {
-            lt: new Date(),
-          },
-        };
-
-    const filter = {
-      ...filterType,
-      ...filterTitle,
-      ...filterStatus,
-    };
+    const filter = competitionFilter({ type, title, status });
 
     const competition = await this.prismaService.competition.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
@@ -186,16 +157,6 @@ export class CompetitionService {
         ...filter,
       },
     });
-    const data = competition.map((competition) => ({
-      uuid: competition.uuid,
-      thumbnail: competition.thumbnail,
-      title: competition.title,
-      slug: competition.slug,
-      type: competition.type,
-      start_date: competition.start_date,
-      end_date: competition.end_date,
-      submission_deadline: competition.submission_deadline,
-    }));
 
     const total = await this.prismaService.competition.count({
       where: { ...filter },
@@ -203,7 +164,7 @@ export class CompetitionService {
 
     return {
       status: 'success',
-      data,
+      data: competition,
       pagination: {
         page,
         limit,

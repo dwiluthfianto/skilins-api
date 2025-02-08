@@ -79,8 +79,33 @@ export class StoryController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  findAll(@Query() query: FindContentQueryDto) {
-    return this.storyService.findAllStory(query);
+  findAllStoryByUser(@Query() query: FindContentQueryDto) {
+    return this.storyService.findAllStoryByUser(query);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  summaryStoryStudent(@Req() req: Request) {
+    const user = req.user;
+    return this.storyService.summaryStoryStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryStoryStaff() {
+    return this.storyService.summaryStoryStaff();
+  }
+
+  @Get('staff')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  @HttpCode(HttpStatus.OK)
+  findAllStoryByStaff(@Query() query: FindContentQueryDto) {
+    return this.storyService.findAllStoryByStaff(query);
   }
 
   @Get('student')
@@ -179,22 +204,5 @@ export class StoryController {
     const story = this.storyService.deleteStory(storyUuid);
 
     return res.status(HttpStatus.OK).json(story);
-  }
-
-  @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('student')
-  summaryStoryStudent(@Req() req: Request) {
-    const user = req.user;
-    return this.storyService.summaryStoryStudent(user['sub']);
-  }
-
-  @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  summaryStoryStaff() {
-    return this.storyService.summaryStoryStaff();
   }
 }

@@ -12,7 +12,10 @@ import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
 import { ContentStatus, Prisma } from '@prisma/client';
 import parseArrayInput from 'src/common/utils/parse-array';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
-import { subMonths } from 'date-fns';
+import {
+  contentFilter,
+  contentFilterByUser,
+} from 'src/common/utils/filter/content-filter';
 
 @Injectable()
 export class EbookService {
@@ -58,6 +61,19 @@ export class EbookService {
         throw new BadRequestException(
           'Please provide the thumbnail and file ebook!',
         );
+      }
+
+      const category = await prisma.category.findFirst({
+        where: {
+          name: {
+            equals: category_name,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (!category) {
+        throw new BadRequestException('Category not found');
       }
 
       await prisma.content.create({
@@ -111,89 +127,85 @@ export class EbookService {
     return res;
   }
 
-  async findAllEbook(findContentQueryDto: FindContentQueryDto) {
-    const { page, limit, category, tag, genre, search, status, latest } =
+  async findAllEbookByUser(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, latest } =
       findContentQueryDto;
 
-    const currentDate = new Date();
-
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
-          },
-        }
-      : {};
-
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
-
-    const categoryFilter = category
-      ? {
-          category: {
-            name: {
-              equals: category,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          },
-        }
-      : {};
-
-    const genreFilter = genre
-      ? {
-          genre: {
-            some: {
-              name: {
-                equals: genre,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...categoryFilter,
-      ...genreFilter,
-      ...tagFilter,
-    };
+    const filter = contentFilterByUser({
+      category,
+      tag,
+      genre,
+      search,
+      latest,
+    });
 
     const content = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
         type: 'ebook',
+        status: {
+          equals: ContentStatus.approved,
+        },
+        ...filter,
+      },
+      include: {
+        rating: true,
+      },
+    });
+
+    const total = await this.prismaService.content.count({
+      where: { type: 'ebook', ...filter },
+    });
+
+    const data = await Promise.all(
+      content.map(async (content) => {
+        const avgRatingResult = await this.prismaService.rating.aggregate({
+          where: { content_id: content.id },
+          _avg: {
+            rating_value: true,
+          },
+        });
+        const avg_rating = avgRatingResult._avg.rating_value || 0;
+
+        return {
+          ...content,
+          avg_rating,
+        };
+      }),
+    );
+
+    return {
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
+    };
+  }
+
+  async findAllEbookByStaff(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, status, latest } =
+      findContentQueryDto;
+
+    const filter = contentFilter({
+      category,
+      tag,
+      status,
+      genre,
+      search,
+      latest,
+    });
+
+    const content = await this.prismaService.content.findMany({
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+      where: {
+        type: 'ebook',
+        status: {
+          equals: ContentStatus.approved,
+        },
         ...filter,
       },
       include: {

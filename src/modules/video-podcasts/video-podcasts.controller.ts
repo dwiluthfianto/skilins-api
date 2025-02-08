@@ -77,8 +77,37 @@ export class VideoPodcastController {
     isArray: true,
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query() query: FindContentQueryDto) {
-    return this.videoPodcastService.findAllVideo(query);
+  findAllVideoByUser(@Query() query: FindContentQueryDto) {
+    return this.videoPodcastService.findAllVideoByUser(query);
+  }
+
+  @Get('staff')
+  @ApiOkResponse({
+    type: VideoPodcast,
+    isArray: true,
+  })
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  @HttpCode(HttpStatus.OK)
+  findAllVideoByStaff(@Query() query: FindContentQueryDto) {
+    return this.videoPodcastService.findAllVideoByStaff(query);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  async summaryAudioStudent(@Req() req: Request) {
+    const user = req.user;
+    return this.videoPodcastService.summaryVideoStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  async summaryAudioStaff() {
+    return this.videoPodcastService.summaryVideoStaff();
   }
 
   @Get('student')
@@ -158,22 +187,5 @@ export class VideoPodcastController {
     const audio = await this.videoPodcastService.removeVideoByUuid(uuid);
 
     return res.status(HttpStatus.OK).json(audio);
-  }
-
-  @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('student')
-  async summaryAudioStudent(@Req() req: Request) {
-    const user = req.user;
-    return this.videoPodcastService.summaryVideoStudent(user['sub']);
-  }
-
-  @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  async summaryAudioStaff() {
-    return this.videoPodcastService.summaryVideoStaff();
   }
 }

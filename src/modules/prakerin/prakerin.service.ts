@@ -12,6 +12,10 @@ import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { subMonths } from 'date-fns';
 import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
+import {
+  contentFilter,
+  contentFilterByUser,
+} from 'src/common/utils/filter/content-filter';
 
 @Injectable()
 export class PrakerinService {
@@ -81,43 +85,68 @@ export class PrakerinService {
     return res;
   }
 
-  async findAllPrakerin(findPrakerinQueryDto: FindPrakerinQueryDto) {
-    const { page, limit, search, status, latest } = findPrakerinQueryDto;
+  async findAllPrakerinByUser(findPrakerinQueryDto: FindPrakerinQueryDto) {
+    const { page, limit, search, latest } = findPrakerinQueryDto;
 
-    const currentDate = new Date();
+    const filter = contentFilterByUser({ latest, search });
 
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
+    const prakerin = await this.prismaService.content.findMany({
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+      where: {
+        type: 'prakerin',
+        ...filter,
+      },
+      include: {
+        rating: true,
+        prakerin: {
+          include: {
+            file_attachment: true,
+            creator: {
+              include: {
+                major: true,
+              },
+            },
           },
-        }
-      : {};
+        },
+      },
+    });
 
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
+    const total = await this.prismaService.content.count({
+      where: { type: 'prakerin', ...filter },
+    });
+
+    const data = await Promise.all(
+      prakerin.map(async (content) => {
+        const avgRatingResult = await this.prismaService.rating.aggregate({
+          where: { content_id: content.id },
+          _avg: {
+            rating_value: true,
+          },
+        });
+        const avg_rating = avgRatingResult._avg.rating_value || 0;
+        return {
+          ...content,
+          avg_rating,
+        };
+      }),
+    );
+
+    return {
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
       },
     };
+  }
 
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
+  async findAllPrakerinByStaff(findPrakerinQueryDto: FindPrakerinQueryDto) {
+    const { page, limit, search, status, latest } = findPrakerinQueryDto;
 
-    const filter = {
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-    };
+    const filter = contentFilter({ latest, search, status });
 
     const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
@@ -188,10 +217,6 @@ export class PrakerinService {
       );
     }
 
-    const currentDate = new Date();
-
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
     const filterByUser = {
       prakerin: {
         creator: {
@@ -200,42 +225,13 @@ export class PrakerinService {
       },
     };
 
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
-          },
-        }
-      : {};
-
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
-
-    const filter = {
-      ...filterByUser,
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-    };
+    const filter = contentFilterByUser({ latest, search });
 
     const prakerin = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
         type: 'prakerin',
+        ...filterByUser,
         ...filter,
       },
       include: {

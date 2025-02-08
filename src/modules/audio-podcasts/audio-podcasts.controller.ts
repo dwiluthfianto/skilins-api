@@ -88,8 +88,38 @@ export class AudioPodcastController {
     isArray: true,
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query() query: FindContentQueryDto) {
-    return this.audioPodcastService.findAllAudio(query);
+  getAllAudioByUser(@Query() query: FindContentQueryDto) {
+    return this.audioPodcastService.findAllAudioByUser(query);
+  }
+
+  @Get('summary-student')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('student')
+  summaryAudioStudent(@Req() req: Request) {
+    const user = req.user;
+
+    return this.audioPodcastService.summaryAudioStudent(user['sub']);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryAudioStaff() {
+    return this.audioPodcastService.summaryAudioStaff();
+  }
+
+  @Get('staff')
+  @ApiOkResponse({
+    type: AudioPodcast,
+    isArray: true,
+  })
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  @HttpCode(HttpStatus.OK)
+  getAllAudioByStaff(@Query() query: FindContentQueryDto) {
+    return this.audioPodcastService.findAllAudioByStaff(query);
   }
 
   @Get('student')
@@ -187,22 +217,5 @@ export class AudioPodcastController {
     const audio = await this.audioPodcastService.removeAudioByUuid(contentUuid);
 
     return res.status(HttpStatus.OK).json(audio);
-  }
-
-  @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('student')
-  summaryAudioStudent(@Req() req: Request) {
-    const user = req.user;
-    return this.audioPodcastService.summaryAudioStudent(user['sub']);
-  }
-
-  @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  summaryAudioStaff() {
-    return this.audioPodcastService.summaryAudioStaff();
   }
 }

@@ -13,6 +13,10 @@ import parseArrayInput from 'src/common/utils/parse-array';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { subMonths } from 'date-fns';
+import {
+  contentFilter,
+  contentFilterByUser,
+} from 'src/common/utils/filter/content-filter';
 
 @Injectable()
 export class VideoPodcastService {
@@ -93,84 +97,71 @@ export class VideoPodcastService {
     return res;
   }
 
-  async findAllVideo(findContentQueryDto: FindContentQueryDto) {
-    const { page, limit, category, tag, genre, search, status, latest } =
+  async findAllVideoByUser(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, latest } =
       findContentQueryDto;
-    const currentDate = new Date();
 
-    const twoMonthsAgo = subMonths(currentDate, 2);
+    const filter = contentFilterByUser({
+      search,
+      latest,
+      tag,
+      genre,
+      category,
+    });
 
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
+    const videos = await this.prismaService.content.findMany({
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+      where: {
+        type: 'video',
+        ...filter,
+      },
+    });
+
+    const total = await this.prismaService.content.count({
+      where: { type: 'video', ...filter },
+    });
+
+    const data = await Promise.all(
+      videos.map(async (video) => {
+        const avgRatingResult = await this.prismaService.rating.aggregate({
+          where: { content_id: video.id },
+          _avg: {
+            rating_value: true,
           },
-        }
-      : {};
+        });
+        const avg_rating = avgRatingResult._avg.rating_value || 0;
 
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
+        return {
+          ...video,
+          avg_rating,
+        };
+      }),
+    );
+
+    return {
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
       },
     };
+  }
 
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
+  async findAllVideoByStaff(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, status, latest } =
+      findContentQueryDto;
 
-    const categoryFilter = category
-      ? {
-          category: {
-            name: {
-              equals: category,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          },
-        }
-      : {};
-
-    const genreFilter = genre
-      ? {
-          genre: {
-            some: {
-              name: {
-                equals: genre,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...categoryFilter,
-      ...genreFilter,
-      ...tagFilter,
-    };
-
+    const filter = contentFilter({
+      search,
+      latest,
+      tag,
+      genre,
+      category,
+      status,
+    });
     const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
@@ -229,10 +220,6 @@ export class VideoPodcastService {
       );
     }
 
-    const currentDate = new Date();
-
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
     const filterByUser = {
       video_podcast: {
         creator: {
@@ -241,82 +228,20 @@ export class VideoPodcastService {
       },
     };
 
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
-          },
-        }
-      : {};
-
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
-
-    const categoryFilter = category
-      ? {
-          category: {
-            name: {
-              equals: category,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          },
-        }
-      : {};
-
-    const genreFilter = genre
-      ? {
-          genre: {
-            some: {
-              name: {
-                equals: genre,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...filterByUser,
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...categoryFilter,
-      ...genreFilter,
-      ...tagFilter,
-    };
+    const filter = contentFilter({
+      search,
+      latest,
+      tag,
+      genre,
+      category,
+      status,
+    });
 
     const videos = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
         type: 'video',
+        ...filterByUser,
         ...filter,
       },
     });

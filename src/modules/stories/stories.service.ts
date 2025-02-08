@@ -14,6 +14,10 @@ import parseArrayInput from 'src/common/utils/parse-array';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { subMonths } from 'date-fns';
+import {
+  contentFilter,
+  contentFilterByUser,
+} from 'src/common/utils/filter/content-filter';
 
 @Injectable()
 export class StoryService {
@@ -129,84 +133,17 @@ export class StoryService {
     return res;
   }
 
-  async findAllStory(findContentQueryDto: FindContentQueryDto) {
-    const { page, limit, category, tag, genre, search, status, latest } =
+  async findAllStoryByUser(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, latest } =
       findContentQueryDto;
 
-    const currentDate = new Date();
-
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
-          },
-        }
-      : {};
-
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
-
-    const categoryFilter = category
-      ? {
-          category: {
-            name: {
-              equals: category,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          },
-        }
-      : {};
-
-    const genreFilter = genre
-      ? {
-          genre: {
-            some: {
-              name: {
-                equals: genre,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...categoryFilter,
-      ...genreFilter,
-      ...tagFilter,
-    };
+    const filter = contentFilterByUser({
+      category,
+      tag,
+      genre,
+      search,
+      latest,
+    });
 
     const story = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
@@ -216,7 +153,63 @@ export class StoryService {
       },
     });
 
-    const total = await this.prismaService.story.count();
+    const total = await this.prismaService.content.count({
+      where: { type: 'story', ...filter },
+    });
+
+    const data = await Promise.all(
+      story.map(async (story) => {
+        const avgRatingResult = await this.prismaService.rating.aggregate({
+          where: { content_id: story.id },
+          _avg: {
+            rating_value: true,
+          },
+        });
+        const avg_rating = avgRatingResult._avg.rating_value || 0;
+
+        return {
+          ...story,
+          avg_rating,
+        };
+      }),
+    );
+
+    return {
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
+    };
+  }
+
+  async findAllStoryByStaff(findContentQueryDto: FindContentQueryDto) {
+    const { page, limit, category, tag, genre, search, latest, status } =
+      findContentQueryDto;
+
+    const filter = contentFilter({
+      category,
+      tag,
+      genre,
+      search,
+      latest,
+      status,
+    });
+
+    const story = await this.prismaService.content.findMany({
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+      where: {
+        type: 'story',
+        ...filter,
+      },
+    });
+
+    const total = await this.prismaService.content.count({
+      where: { type: 'story', ...filter },
+    });
 
     const data = await Promise.all(
       story.map(async (story) => {
@@ -262,10 +255,6 @@ export class StoryService {
       throw new NotFoundException(404, 'Your account has been deleted');
     }
 
-    const currentDate = new Date();
-
-    const twoMonthsAgo = subMonths(currentDate, 2);
-
     const filterByUser = {
       story: {
         creator: {
@@ -274,82 +263,20 @@ export class StoryService {
       },
     };
 
-    const latestFilter = latest
-      ? {
-          status: ContentStatus.approved,
-          created_at: {
-            gte: twoMonthsAgo,
-            lte: currentDate,
-          },
-        }
-      : {};
-
-    const searchByTitle = {
-      title: {
-        contains: search,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    };
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
-          },
-        }
-      : {};
-
-    const categoryFilter = category
-      ? {
-          category: {
-            name: {
-              equals: category,
-              mode: Prisma.QueryMode.insensitive,
-            },
-          },
-        }
-      : {};
-
-    const genreFilter = genre
-      ? {
-          genre: {
-            some: {
-              name: {
-                equals: genre,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const tagFilter = tag
-      ? {
-          tag: {
-            some: {
-              name: {
-                equals: tag,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          },
-        }
-      : {};
-
-    const filter = {
-      ...filterByUser,
-      ...searchByTitle,
-      ...latestFilter,
-      ...statusFilter,
-      ...categoryFilter,
-      ...genreFilter,
-      ...tagFilter,
-    };
+    const filter = contentFilter({
+      category,
+      tag,
+      genre,
+      search,
+      latest,
+      status,
+    });
 
     const story = await this.prismaService.content.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
       where: {
         type: 'story',
+        ...filterByUser,
         ...filter,
       },
     });

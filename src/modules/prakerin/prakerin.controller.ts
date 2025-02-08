@@ -90,8 +90,28 @@ export class PrakerinController {
     isArray: true,
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query() query: FindPrakerinQueryDto) {
-    return this.prakerinService.findAllPrakerin(query);
+  findAllByUser(@Query() query: FindPrakerinQueryDto) {
+    return this.prakerinService.findAllPrakerinByUser(query);
+  }
+
+  @Get('staff')
+  @ApiOkResponse({
+    type: Prakerin,
+    isArray: true,
+  })
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  @HttpCode(HttpStatus.OK)
+  findAllByStaff(@Query() query: FindPrakerinQueryDto) {
+    return this.prakerinService.findAllPrakerinByStaff(query);
+  }
+
+  @Get('summary-staff')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('staff')
+  summaryPrakerinStaff() {
+    return this.prakerinService.summaryPrakerinStaff();
   }
 
   @Get('student')
@@ -192,13 +212,5 @@ export class PrakerinController {
       await this.prakerinService.removePrakerinByUuid(contentUuid);
 
     return res.status(HttpStatus.OK).json(prakerin);
-  }
-
-  @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  summaryPrakerinStaff() {
-    return this.prakerinService.summaryPrakerinStaff();
   }
 }
