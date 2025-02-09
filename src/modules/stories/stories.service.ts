@@ -205,6 +205,17 @@ export class StoryService {
         type: 'story',
         ...filter,
       },
+      include: {
+        story: {
+          include: {
+            creator: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const total = await this.prismaService.content.count({

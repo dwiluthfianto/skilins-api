@@ -78,18 +78,6 @@ export class BlogController {
     return this.blogService.findAllBlogByUser(query);
   }
 
-  @Get('staff')
-  @ApiOkResponse({
-    type: Blog,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  findAllBlogByStaff(@Query() query: FindBlogQueryDto) {
-    return this.blogService.findAllBlogByStaff(query);
-  }
-
   @Get(':slug')
   @ApiOkResponse({
     type: Blog,

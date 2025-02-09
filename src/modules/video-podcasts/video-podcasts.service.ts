@@ -168,6 +168,22 @@ export class VideoPodcastService {
         type: 'video',
         ...filter,
       },
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+        video_podcast: {
+          include: {
+            creator: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const total = await this.prismaService.content.count({

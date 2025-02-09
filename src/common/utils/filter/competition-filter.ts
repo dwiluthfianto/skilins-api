@@ -20,7 +20,6 @@ function competitionFilter({ title, status, type }: CompetitionFilter) {
     ? {
         type: {
           equals: type as ContentType,
-          mode: Prisma.QueryMode.insensitive,
         },
       }
     : {};

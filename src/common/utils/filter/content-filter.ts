@@ -44,7 +44,6 @@ export function contentFilter({
     ? {
         status: {
           equals: status,
-          mode: Prisma.QueryMode.insensitive,
         },
       }
     : {};
@@ -128,7 +127,6 @@ export function contentFilterByUser({
   const statusFilter = {
     status: {
       equals: ContentStatus.approved,
-      mode: Prisma.QueryMode.insensitive,
     },
   };
 

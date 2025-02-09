@@ -87,18 +87,6 @@ export class EbookController {
     return this.ebookService.findAllEbookByUser(query);
   }
 
-  @Get('staff')
-  @ApiOkResponse({
-    type: Ebook,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  findAllByStaff(@Query() query: FindContentQueryDto) {
-    return this.ebookService.findAllEbookByStaff(query);
-  }
-
   @Get(':slug')
   @ApiOkResponse({
     type: Ebook,

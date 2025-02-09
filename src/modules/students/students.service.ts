@@ -89,16 +89,7 @@ export class StudentService {
 
     return {
       status: 'success',
-      data: student.map((student) => ({
-        uuid: student.uuid,
-        nis: student.nis,
-        name: student.name,
-        birthplace: student.birthplace,
-        birthdate: student.birthdate,
-        sex: student.sex,
-        major: student.major.name,
-        status: student.status,
-      })),
+      data: student,
       pagination: {
         page,
         limit,

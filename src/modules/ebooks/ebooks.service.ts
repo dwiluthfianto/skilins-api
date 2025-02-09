@@ -149,67 +149,20 @@ export class EbookService {
         ...filter,
       },
       include: {
-        rating: true,
-      },
-    });
-
-    const total = await this.prismaService.content.count({
-      where: { type: 'ebook', ...filter },
-    });
-
-    const data = await Promise.all(
-      content.map(async (content) => {
-        const avgRatingResult = await this.prismaService.rating.aggregate({
-          where: { content_id: content.id },
-          _avg: {
-            rating_value: true,
+        category: {
+          select: {
+            name: true,
           },
-        });
-        const avg_rating = avgRatingResult._avg.rating_value || 0;
-
-        return {
-          ...content,
-          avg_rating,
-        };
-      }),
-    );
-
-    return {
-      status: 'success',
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        last_page: limit ? Math.ceil(total / limit) : 1,
-      },
-    };
-  }
-
-  async findAllEbookByStaff(findContentQueryDto: FindContentQueryDto) {
-    const { page, limit, category, tag, genre, search, status, latest } =
-      findContentQueryDto;
-
-    const filter = contentFilter({
-      category,
-      tag,
-      status,
-      genre,
-      search,
-      latest,
-    });
-
-    const content = await this.prismaService.content.findMany({
-      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
-      where: {
-        type: 'ebook',
-        status: {
-          equals: ContentStatus.approved,
         },
-        ...filter,
-      },
-      include: {
-        rating: true,
+        ebook: {
+          include: {
+            file_attachment: {
+              select: {
+                file: true,
+              },
+            },
+          },
+        },
       },
     });
 

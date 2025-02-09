@@ -207,6 +207,27 @@ export class AudioPodcastService {
       orderBy: {
         created_at: 'desc',
       },
+      include: {
+        category: {
+          select: {
+            name: true,
+          },
+        },
+        audio_podcast: {
+          include: {
+            file_attachment: {
+              select: {
+                file: true,
+              },
+            },
+            creator: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const total = await this.prismaService.content.count({

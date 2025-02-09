@@ -155,12 +155,16 @@ export class PrakerinService {
         ...filter,
       },
       include: {
-        rating: true,
         prakerin: {
           include: {
-            file_attachment: true,
+            file_attachment: {
+              select: {
+                file: true,
+              },
+            },
             creator: {
-              include: {
+              select: {
+                name: true,
                 major: true,
               },
             },

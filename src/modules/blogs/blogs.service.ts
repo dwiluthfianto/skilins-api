@@ -91,56 +91,15 @@ export class BlogService {
         ...filter,
       },
       include: {
-        rating: true,
-      },
-    });
-
-    const total = await this.prismaService.content.count({
-      where: { type: 'blog', ...filter },
-    });
-
-    const data = await Promise.all(
-      blogs.map(async (blog) => {
-        const avgRatingResult = await this.prismaService.rating.aggregate({
-          where: { content_id: blog.id },
-          _avg: {
-            rating_value: true,
+        blog: {
+          include: {
+            creator: {
+              select: {
+                full_name: true,
+              },
+            },
           },
-        });
-        const avg_rating = avgRatingResult._avg.rating_value || 0;
-
-        return {
-          ...blog,
-          avg_rating,
-        };
-      }),
-    );
-
-    return {
-      status: 'success',
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        last_page: limit ? Math.ceil(total / limit) : 1,
-      },
-    };
-  }
-
-  async findAllBlogByStaff(findBlogQueryDto: FindBlogQueryDto) {
-    const { page, limit, tag, search, status, latest } = findBlogQueryDto;
-
-    const filter = contentFilter({ tag, search, latest, status });
-
-    const blogs = await this.prismaService.content.findMany({
-      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
-      where: {
-        type: 'blog',
-        ...filter,
-      },
-      include: {
-        rating: true,
+        },
       },
     });
 
