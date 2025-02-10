@@ -22,6 +22,12 @@ export class FindStudentDto {
   @IsOptional()
   @IsString()
   name?: string;
+  
+  @ApiPropertyOptional({ example: 'John Doe', type: String })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
 
   @ApiPropertyOptional({ example: 'Kimia Industri', type: String })
   @IsOptional()

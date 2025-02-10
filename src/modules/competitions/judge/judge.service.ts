@@ -60,19 +60,7 @@ export class JudgeService {
 
     return {
       status: 'success',
-      data: judge.map((judge) => {
-        const judgeData = judge.judge;
-        return {
-          uuid: judge.uuid,
-          profile: judge.profile,
-          full_name: judge.full_name,
-          email: judge.email,
-          role: judgeData.role,
-          linkedin: judgeData.linkedin,
-          instagram: judgeData.instagram,
-          competition: judgeData.competition?.title,
-        };
-      }),
+      data: judge,
       pagination: {
         page,
         limit,

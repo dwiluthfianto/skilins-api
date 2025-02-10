@@ -3,7 +3,7 @@ import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-
+import { FindTagDto } from './dto/find-tag.dto';
 @Injectable()
 export class TagService {
   constructor(private readonly prismaService: PrismaService) {}
@@ -30,10 +30,13 @@ export class TagService {
     return res;
   }
 
-  async findAll(name: string) {
+  async findAll(query: FindTagDto) {
+    const { page, limit, name } = query;
+
     const filterName = {
       name: {
         contains: name,
+
         mode: Prisma.QueryMode.insensitive,
       },
     };
@@ -42,10 +45,26 @@ export class TagService {
       where: {
         ...filterName,
       },
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
     });
+
+    
+    const total = await this.prismaService.tag.count({
+      where: {
+        ...filterName,
+      },
+    });
+
+
     return {
       status: 'success',
       data: tag,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 

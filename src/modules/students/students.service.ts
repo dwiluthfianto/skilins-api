@@ -35,56 +35,64 @@ export class StudentService {
   }
 
   async findAllStudent(query: FindStudentDto) {
-    const { page, limit, nis, name, major, status } = query;
+    const { page, limit, nis, name, major, status, search } = query;
 
-    const nisFilter = {
-      nis: {
+    let filter: Prisma.StudentWhereInput = {};
+
+    if (nis) {
+      filter.nis = {
         contains: nis,
         mode: Prisma.QueryMode.insensitive,
-      },
-    };
+      };
+    }
 
-    const nameFilter = {
-      name: {
+    if (name) {
+      filter.name = {
         contains: name,
         mode: Prisma.QueryMode.insensitive,
-      },
-    };
+      };
+    }
 
-    const majorFilter = major
-      ? {
-          major: {
-            name: {
-              equals: major,
-              mode: Prisma.QueryMode.insensitive,
-            },
+    if (search) {
+      filter.OR = [
+        {
+          nis: {
+            contains: search,
+            mode: Prisma.QueryMode.insensitive,
           },
-        }
-      : {};
-
-    const statusFilter = status
-      ? {
-          status: {
-            equals: status,
+        },
+        {
+          name: {
+            contains: search,
+            mode: Prisma.QueryMode.insensitive,
           },
-        }
-      : {};
+        },
+      ];
+    }
 
-    const filter = {
-      ...nisFilter,
-      ...nameFilter,
-      ...majorFilter,
-      ...statusFilter,
-    };
+    if (major) {
+      filter.major = {
+        name: {
+          equals: major,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      };
+    }
+
+    if (status !== undefined) {
+      filter.status = {
+        equals: status,
+      };
+    }
 
     const student = await this.prismaService.student.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
-      where: { ...filter },
+      where: filter,
       include: { major: true },
     });
 
     const total = await this.prismaService.student.count({
-      where: { ...filter },
+      where: filter,
     });
 
     return {

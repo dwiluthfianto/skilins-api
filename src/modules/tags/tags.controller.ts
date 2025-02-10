@@ -32,7 +32,7 @@ import { Tag } from './entities/tag.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
-
+import { FindTagDto } from './dto/find-tag.dto';
 @ApiTags('Tag')
 @ApiBearerAuth('JWT-auth')
 @Controller({ path: 'tags', version: '1' })
@@ -70,9 +70,10 @@ export class TagController {
     type: String,
     description: 'search by name for categories',
   })
-  findAll(@Query('search') search: string) {
-    return this.tagService.findAll(search);
+  findAll(@Query() query: FindTagDto) {
+    return this.tagService.findAll(query);
   }
+
 
   @Get(':name')
   @ApiOkResponse({ type: Tag })
