@@ -4,14 +4,15 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-  Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Response } from 'express';
+import { Logger } from 'winston';
+import { Inject } from '@nestjs/common';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(GlobalExceptionFilter.name);
+  constructor(@Inject('winston') private readonly logger: Logger) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -102,7 +103,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         break;
       }
       case 'P2003': {
-        message = 'Foreign key constraint failed. Please check your references.';
+        message =
+          'Foreign key constraint failed. Please check your references.';
         status = HttpStatus.BAD_REQUEST;
         break;
       }
@@ -139,21 +141,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   private logError(exception: unknown, errorResponse: any): void {
     if (exception instanceof Error) {
-      this.logger.error(
-        `Error: ${exception.message}`,
-        exception.stack,
-        'GlobalExceptionFilter',
-      );
+      this.logger.error(`Error: ${exception.message}`, {
+        stack: exception.stack,
+        context: 'GlobalExceptionFilter',
+      });
     } else {
       this.logger.error(
         `Unknown error occurred: ${JSON.stringify(exception)}`,
-        'GlobalExceptionFilter',
+        {
+          context: 'GlobalExceptionFilter',
+        },
       );
     }
 
-    this.logger.error(
-      `Error Response: ${JSON.stringify(errorResponse)}`,
-      'GlobalExceptionFilter',
-    );
+    this.logger.error(`Error Response: ${JSON.stringify(errorResponse)}`, {
+      context: 'GlobalExceptionFilter',
+    });
   }
 }

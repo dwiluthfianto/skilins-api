@@ -29,6 +29,10 @@ import { StoryModule } from './modules/stories/stories.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './common/logger/wingston.config';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { APP_FILTER } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -36,6 +40,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
       rootPath: join(__dirname, '..', 'uploads'), // Folder "uploads" sebagai root file statis
       serveRoot: '/public', // URL akses publik, contoh: http://localhost:3000/uploads/
     }),
+    WinstonModule.forRoot(winstonConfig),
     PrismaModule,
     EbookModule,
     CategoryModule,
@@ -69,6 +74,12 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     FileUploadModule,
   ],
   controllers: [],
-  providers: [PrismaService],
+  providers: [
+    PrismaService,
+    {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}

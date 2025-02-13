@@ -3,7 +3,7 @@ import { CreateGenreDto } from './dto/create-genre.dto';
 import { UpdateGenreDto } from './dto/update-genre.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-
+import { FindGenreDto } from './dto/find-genre.dto';
 @Injectable()
 export class GenreService {
   constructor(private readonly prismaService: PrismaService) {}
@@ -30,7 +30,9 @@ export class GenreService {
     return res;
   }
 
-  async findAll(name: string) {
+  async findAll(query: FindGenreDto) {
+    const { page, limit, name } = query;
+
     const filterName = {
       name: {
         contains: name,
@@ -42,11 +44,24 @@ export class GenreService {
       where: {
         ...filterName,
       },
+      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+    });
+
+    const total = await this.prismaService.genre.count({
+      where: {
+        ...filterName,
+      },
     });
 
     return {
       status: 'success',
       data: genre,
+      pagination: {
+        page,
+        limit,
+        total,
+        last_page: limit ? Math.ceil(total / limit) : 1,
+      },
     };
   }
 

@@ -32,7 +32,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Genre } from './entities/genre.entity';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
-
+import { FindGenreDto } from './dto/find-genre.dto';
 @ApiTags('Genre')
 @ApiBasicAuth('JWT-auth')
 @Controller({ path: 'genres', version: '1' })
@@ -69,8 +69,8 @@ export class GenreController {
     description: 'search by name for categories',
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query('search') search: string) {
-    return this.genreService.findAll(search);
+  findAll(@Query() query: FindGenreDto) {
+    return this.genreService.findAll(query);
   }
 
   @Get(':name')

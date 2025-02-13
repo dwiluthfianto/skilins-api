@@ -3,7 +3,6 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -22,14 +21,10 @@ import {
 @Injectable()
 export class AudioPodcastService {
   constructor(
-    @Inject(Logger)
-    private readonly logger: Logger,
     private prismaService: PrismaService,
     private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
-  ) {
-    this.logger = new Logger('Audio Podcast Logger');
-  }
+  ) {}
 
   async createAudioPodcast(creatorUuid: string, data: CreateAudioPodcastDto) {
     const {
@@ -58,9 +53,6 @@ export class AudioPodcastService {
       });
 
       if (!userData) {
-        this.logger.warn(
-          'student not found, please make sure you input correct student',
-        );
         throw new NotFoundException(
           'student not found, please make sure you input correct student',
         );
@@ -74,7 +66,6 @@ export class AudioPodcastService {
       });
 
       if (!fileAttachment && !thumbnail) {
-        this.logger.warn('Please provide the thumbnail and file audio!');
         throw new BadRequestException(
           'Please provide the thumbnail and file audio!',
         );
@@ -117,6 +108,7 @@ export class AudioPodcastService {
           },
         },
       });
+
       return {
         status: 'success',
         message: 'Audio successfully uploaded!',
@@ -362,9 +354,6 @@ export class AudioPodcastService {
     });
 
     if (!audio) {
-      this.logger.warn(
-        'Audio not found, please make sure you input correct audio',
-      );
       throw new NotFoundException(
         'Audio not found, please make sure you input correct audio',
       );
@@ -414,9 +403,6 @@ export class AudioPodcastService {
     });
 
     if (!audio) {
-      this.logger.warn(
-        'Audio not found, please make sure you input correct audio',
-      );
       throw new NotFoundException(
         'Audio not found, please make sure you input correct audio',
       );
@@ -496,7 +482,6 @@ export class AudioPodcastService {
       const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
 
       if (creator.student.id !== content.audio_podcast.creator_id) {
-        this.logger.warn(`You don't have any permission to update this audio`);
         throw new UnauthorizedException(
           `You don't have any permission to update this audio`,
         );
@@ -558,6 +543,7 @@ export class AudioPodcastService {
           },
         },
       });
+
       return {
         status: 'success',
         message: 'Audio successfully updated!',
@@ -574,6 +560,7 @@ export class AudioPodcastService {
       await prisma.content.delete({
         where: { uuid: contentUuid },
       });
+
       return {
         status: 'success',
         message: 'Audio successfully deleted!',

@@ -218,18 +218,24 @@ export class AuthService {
     await this.sendVerificationEmail(uuid);
   }
 
-  async login(
-    authEmailLoginDto: AuthEmailLoginDto,
-  ): Promise<{ accessToken?: string; refreshToken?: string; data?: any }> {
+  async login(authEmailLoginDto: AuthEmailLoginDto): Promise<any> {
     const user = await this.prismaService.user.findUnique({
       where: { email: authEmailLoginDto.email },
-      include: { role: true },
+      include: { role: true, student: true },
     });
 
     if (!user) {
       throw new NotFoundException(
         `User with email ${authEmailLoginDto.email} not found`,
       );
+    }
+
+    if (user.role.name === RoleType.student) {
+      if (user.student.status === false) {
+        throw new UnauthorizedException(
+          'Student is not verified, please contact staff',
+        );
+      }
     }
 
     if (
@@ -257,11 +263,13 @@ export class AuthService {
 
     await this.userService.updateRefreshToken(user.uuid, refreshToken);
     return {
-      accessToken,
-      refreshToken,
+      status: 'success',
+      message: 'Login successful',
       data: {
         uuid: user.uuid,
         email: user.email,
+        access_token: accessToken,
+        refresh_token: refreshToken,
       },
     };
   }
@@ -379,7 +387,7 @@ export class AuthService {
 
     await this.userService.updateRefreshToken(user.data.uuid, newRefreshToken);
 
-    return { accessToken, newRefreshToken };
+    return { access_token: accessToken, refresh_token: newRefreshToken };
   }
 
   async validateRefreshToken(

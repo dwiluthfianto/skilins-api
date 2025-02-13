@@ -33,10 +33,9 @@ export class AuthController {
     @Body() authEmailLoginDto: AuthEmailLoginDto,
     @Res() res: Response,
   ) {
-    const { accessToken, refreshToken, data } =
-      await this.authService.login(authEmailLoginDto);
+    const response = await this.authService.login(authEmailLoginDto);
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('refresh_token', response.data.refresh_token, {
       httpOnly: true,
       secure: false,
       sameSite: 'strict',
@@ -44,12 +43,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.send({
-      status: 'success',
-      message: 'Logged in successfully',
-      data,
-      accessToken,
-    });
+    return res.send(response);
   }
 
   @Post('register')
@@ -75,7 +69,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res() res: Response) {
-    const refreshToken = req.cookies['refreshToken'];
+    const refreshToken = req.cookies['refresh_token'];
 
     if (!refreshToken) {
       return res.status(HttpStatus.FORBIDDEN).send({
@@ -85,10 +79,10 @@ export class AuthController {
     }
 
     try {
-      const { accessToken, newRefreshToken } =
+      const { access_token, refresh_token } =
         await this.authService.refreshTokens(refreshToken);
 
-      res.cookie('refreshToken', newRefreshToken, {
+      res.cookie('refresh_token', refresh_token, {
         httpOnly: true,
         secure: false,
         maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -96,7 +90,7 @@ export class AuthController {
 
       return res.json({
         status: 'success',
-        accessToken,
+        access_token,
       });
     } catch (err) {
       console.error(err.message);
@@ -116,7 +110,7 @@ export class AuthController {
     // Clear the refresh token from the database
     await this.authService.logout(user['sub']);
 
-    res.clearCookie('refreshToken', {
+    res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: false,
     });
