@@ -197,7 +197,7 @@ export class BlogService {
       status: 'success',
       data: {
         ...content,
-        tags: content.tag.map((tag) => ({
+        tag: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),

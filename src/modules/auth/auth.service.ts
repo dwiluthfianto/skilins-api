@@ -16,7 +16,7 @@ import { AuthForgotPasswordDto } from './dto/auth-forgot-password.dto';
 import { AuthResetPasswordDto } from './dto/auth-reset-password.dto';
 import ms from 'ms';
 import { AuthChangePasswordDto } from './dto/auth-change-password.dto';
-import { RoleType } from '@prisma/client';
+import { RoleType, SexType } from '@prisma/client';
 import { AuthRegisterStudentDto } from './dto/auth-register-student.dto';
 import { addMinutes } from 'date-fns';
 
@@ -33,7 +33,7 @@ export class AuthService {
   ) {}
 
   async sendVerificationEmail(uuid: string) {
-    const user = await this.prismaService.user.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUnique({
       where: { uuid },
       include: { role: true },
     });
@@ -304,43 +304,41 @@ export class AuthService {
       authRegisterStudentDto.password,
       10,
     );
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      const role = await prisma.role.findUniqueOrThrow({
-        where: { name: RoleType.user },
-      });
-
-      const user = await prisma.user.create({
-        data: {
-          email: authRegisterStudentDto.email,
-          password: hashedPassword,
-          full_name: authRegisterStudentDto.full_name,
-          email_verified: false,
-          role: { connect: { uuid: role.uuid } },
-        },
-      });
-
-      await prisma.student.create({
-        data: {
-          nis: authRegisterStudentDto.nis,
-          name: authRegisterStudentDto.name,
-          birthdate: authRegisterStudentDto.birthdate,
-          birthplace: authRegisterStudentDto.birthplace,
-          sex: authRegisterStudentDto.sex,
-          user: { connect: { uuid: user.uuid } },
-          major: { connect: { name: authRegisterStudentDto.major } },
-        },
-      });
-
-      await this.sendVerificationEmail(user.uuid);
-
-      return {
-        status: 'success',
-        message:
-          'Register successfully! Please check your email to verify your account.',
-      };
+    const role = await this.prismaService.role.findUnique({
+      where: { name: RoleType.student },
     });
 
-    return res;
+    const major = await this.prismaService.major.findUnique({
+      where: { name: authRegisterStudentDto.major },
+    });
+
+    const user = await this.prismaService.user.create({
+      data: {
+        email: authRegisterStudentDto.email,
+        password: hashedPassword,
+        full_name: authRegisterStudentDto.full_name,
+        email_verified: false,
+        role: { connect: { uuid: role.uuid } },
+        student: {
+          create: {
+            nis: authRegisterStudentDto.nis,
+            name: authRegisterStudentDto.name,
+            birthdate: authRegisterStudentDto.birthdate,
+            birthplace: authRegisterStudentDto.birthplace,
+            sex: authRegisterStudentDto.sex.toLowerCase() as SexType,
+            major: { connect: { uuid: major.uuid } },
+          },
+        },
+      },
+    });
+
+    await this.sendVerificationEmail(user.uuid);
+
+    return {
+      status: 'success',
+      message:
+        'Register successfully! Please check your email to verify your account.',
+    };
   }
 
   async validateUser(uuid: string) {

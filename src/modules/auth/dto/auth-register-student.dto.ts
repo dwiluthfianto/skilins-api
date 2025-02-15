@@ -45,7 +45,12 @@ export class AuthRegisterStudentDto {
   @IsNotEmpty()
   birthdate: Date;
 
-  @ApiProperty({ example: 'male', enum: SexType })
+  @ApiProperty({
+    example: 'male',
+    enum: SexType,
+    enumName: 'SexType',
+    type: SexType,
+  })
   @IsNotEmpty()
   sex: SexType;
 }

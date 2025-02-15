@@ -34,6 +34,7 @@ export class VideoPodcastService {
 
     const res = await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
+
       const parsedTags = parseArrayInput(tags);
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);

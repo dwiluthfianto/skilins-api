@@ -206,6 +206,7 @@ export class StoryService {
         ...filter,
       },
       include: {
+        category: true,
         story: {
           include: {
             creator: {
@@ -401,21 +402,28 @@ export class StoryService {
   }
 
   async getOneEpisode(slugStory: string, order: number) {
-    const story = await this.prismaService.content.findUnique({
+    const content = await this.prismaService.content.findUnique({
       where: {
         type: 'story',
         slug: slugStory,
       },
+      include: {
+        story: {
+          include: {
+            episode: true,
+          },
+        },
+      },
     });
 
-    if (!story) {
+    if (!content) {
       throw new NotFoundException(
         'Story not found, please make sure you input correct story',
       );
     }
     const episode = await this.prismaService.episode.findFirst({
       where: {
-        story_id: story.id,
+        story_id: content.story.id,
         order,
       },
     });
@@ -534,7 +542,7 @@ export class StoryService {
       updateStoryDto;
 
     const res = await this.prismaService.$transaction(async (prisma) => {
-      const content = await prisma.content.findUniqueOrThrow({
+      const content = await prisma.content.findUnique({
         where: { type: 'story', uuid: contentUuid },
         include: {
           story: {
@@ -544,10 +552,18 @@ export class StoryService {
           },
         },
       });
+
+      if (!content) {
+        throw new NotFoundException(
+          'Story not found, please make sure you input correct story',
+        );
+      }
       const category =
         await this.uuidHelper.validateUuidCategory(category_name);
 
-      if (content.story.creator.uuid !== creatorUuid) {
+      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
+
+      if (content.story.creator.id !== creator.student.id) {
         throw new ForbiddenException(
           'You do not have permission to update this story.',
         );

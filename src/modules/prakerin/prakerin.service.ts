@@ -1,5 +1,5 @@
 import {
-  ForbiddenException,
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -10,7 +10,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
 import { ContentStatus, Prisma } from '@prisma/client';
-import { subMonths } from 'date-fns';
 import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
 import {
   contentFilter,
@@ -205,12 +204,7 @@ export class PrakerinService {
     };
   }
 
-  async fetchUserPrakerin(
-    userUuid: string,
-    findPrakerinQueryDto: FindPrakerinQueryDto,
-  ) {
-    const { page, limit, search, status, latest } = findPrakerinQueryDto;
-
+  async fetchUserPrakerin(userUuid: string) {
     const user = await this.prismaService.user.findUnique({
       where: { uuid: userUuid },
     });
@@ -229,46 +223,21 @@ export class PrakerinService {
       },
     };
 
-    const filter = contentFilterByUser({ latest, search });
-
-    const prakerin = await this.prismaService.content.findMany({
-      ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
+    const prakerin = await this.prismaService.content.findFirst({
       where: {
         type: 'prakerin',
         ...filterByUser,
-        ...filter,
       },
       include: {
         prakerin: true,
       },
     });
 
-    const total = await this.prismaService.prakerin.count();
-    const data = await Promise.all(
-      prakerin.map(async (content) => {
-        const avgRatingResult = await this.prismaService.rating.aggregate({
-          where: { content_id: content.id },
-          _avg: {
-            rating_value: true,
-          },
-        });
-        const avg_rating = avgRatingResult._avg.rating_value || 0;
-        return {
-          ...content,
-          avg_rating,
-        };
-      }),
-    );
+    const data = prakerin;
 
     return {
       status: 'success',
       data,
-      pagination: {
-        page,
-        limit,
-        total,
-        last_page: limit ? Math.ceil(total / limit) : 1,
-      },
     };
   }
 
@@ -433,19 +402,23 @@ export class PrakerinService {
   }
 
   async removePrakerinByUuid(contentUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.uuidHelper.validateUuidContent(contentUuid);
-
-      await prisma.content.delete({
-        where: { uuid: contentUuid },
-      });
-      return {
-        status: 'success',
-        message: 'Prakerin successfully deleted!',
-      };
+    const content = await this.prismaService.content.findUnique({
+      where: { uuid: contentUuid },
     });
 
-    return res;
+    if (content.status === ContentStatus.approved) {
+      throw new BadRequestException(
+        'Prakerin is already approved, you cannot delete it',
+      );
+    }
+
+    await this.prismaService.content.delete({
+      where: { uuid: contentUuid },
+    });
+    return {
+      status: 'success',
+      message: 'Prakerin successfully deleted!',
+    };
   }
 
   async summaryPrakerinStaff() {

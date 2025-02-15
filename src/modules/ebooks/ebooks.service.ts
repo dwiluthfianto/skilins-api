@@ -253,18 +253,11 @@ export class EbookService {
       status: 'success',
       data: {
         ...content,
-        tags: content.tag.map((tag) => ({
+        tag: content.tag.map((tag) => ({
           id: tag.uuid,
           text: tag.name,
         })),
-        category: content.category.name,
-        author: content.ebook.author,
-        pages: content.ebook.pages,
-        publication: content.ebook.publication,
-        file: content.ebook.file_attachment.file,
-        isbn: content.ebook.isbn,
-        release_date: content.ebook.release_date,
-        genres: content.genre.map((genre) => ({
+        genre: content.genre.map((genre) => ({
           id: genre.uuid,
           text: genre.name,
         })),

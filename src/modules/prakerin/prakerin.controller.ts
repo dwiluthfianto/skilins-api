@@ -122,12 +122,9 @@ export class PrakerinController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('student')
   @HttpCode(HttpStatus.OK)
-  async findUserPrakerin(
-    @Req() req: Request,
-    @Query() query: FindPrakerinQueryDto,
-  ) {
+  async findUserPrakerin(@Req() req: Request) {
     const user = req.user;
-    return await this.prakerinService.fetchUserPrakerin(user['sub'], query);
+    return await this.prakerinService.fetchUserPrakerin(user['sub']);
   }
 
   @Get(':slug')
@@ -193,11 +190,10 @@ export class PrakerinController {
 
   @Delete(':contentUuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles('student', 'staff')
   @ApiOkResponse({
     type: Prakerin,
   })
-  @HttpCode(HttpStatus.OK)
   async remove(
     @Param('contentUuid') contentUuid: string,
     @Res() res: Response,

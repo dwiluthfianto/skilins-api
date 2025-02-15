@@ -37,7 +37,7 @@ import { APP_FILTER } from '@nestjs/core';
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'), // Folder "uploads" sebagai root file statis
+      rootPath: join(process.cwd(), 'uploads'), // Folder "uploads" sebagai root file statis
       serveRoot: '/public', // URL akses publik, contoh: http://localhost:3000/uploads/
     }),
     WinstonModule.forRoot(winstonConfig),

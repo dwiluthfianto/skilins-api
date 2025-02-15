@@ -174,14 +174,9 @@ export class VideoPodcastController {
   @Delete(':uuid')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('staff', 'student')
-  @ApiResponse({
-    status: 200,
-    description: 'The record has been successfully deleted.',
-  })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('uuid') uuid: string, @Res() res: Response) {
     const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
     this.fileUploadService.deleteFile(isExist.data.thumbnail);
 
     const audio = await this.videoPodcastService.removeVideoByUuid(uuid);

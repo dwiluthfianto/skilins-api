@@ -37,26 +37,43 @@ export class ContentService {
   async searchContents(query: string) {
     const contents = await this.prismaService.content.findMany({
       where: {
+        status: ContentStatus.approved,
         OR: [
           { title: { contains: query, mode: 'insensitive' } },
-
           { tag: { some: { name: { contains: query, mode: 'insensitive' } } } },
-          { genre: { some: { name: { contains: query, mode: 'insensitive' } } } },
-          { audio_podcast: { creator: { name: { contains: query, mode: 'insensitive' } } } },
-          { video_podcast: { creator: { name: { contains: query, mode: 'insensitive' } } } },
-          { prakerin: { creator: { name: { contains: query, mode: 'insensitive' } } } },
-          { ebook: { author: { contains: query, mode: 'insensitive' } } } ,
-          { story: { creator: { name: { contains: query, mode: 'insensitive' } } } },
+          {
+            genre: { some: { name: { contains: query, mode: 'insensitive' } } },
+          },
+          {
+            audio_podcast: {
+              creator: { name: { contains: query, mode: 'insensitive' } },
+            },
+          },
+          {
+            video_podcast: {
+              creator: { name: { contains: query, mode: 'insensitive' } },
+            },
+          },
+          {
+            prakerin: {
+              creator: { name: { contains: query, mode: 'insensitive' } },
+            },
+          },
+          { ebook: { author: { contains: query, mode: 'insensitive' } } },
+          {
+            story: {
+              creator: { name: { contains: query, mode: 'insensitive' } },
+            },
+          },
         ],
       },
     });
-
 
     const tags = await this.prismaService.tag.findMany({
       where: {
         name: { contains: query, mode: 'insensitive' },
       },
-    }); 
+    });
 
     const genres = await this.prismaService.genre.findMany({
       where: {
@@ -76,7 +93,5 @@ export class ContentService {
       genres,
       majors,
     };
-
   }
 }
-

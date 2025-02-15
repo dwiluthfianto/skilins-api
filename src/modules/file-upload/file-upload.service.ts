@@ -2,22 +2,19 @@ import {
   BadRequestException,
   HttpException,
   HttpStatus,
-  Inject,
   Injectable,
-  Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class FileUploadService {
-  constructor(
-    @Inject(Logger)
-    private readonly logger: Logger,
-  ) {
-    this.logger = new Logger('File Upload Logger');
+  private uploadDir: string;
+
+  constructor() {
+    this.uploadDir = path.join(process.cwd(), 'uploads');
   }
-  private uploadDir = './uploads';
 
   private extractFilePathFromUrl(fileUrl: string): string {
     const relativePath = fileUrl.replace(
@@ -33,7 +30,6 @@ export class FileUploadService {
 
   handleFileUpload(file: Express.Multer.File) {
     if (!file) {
-      this.logger.error('No file uploaded');
       throw new BadRequestException('no file uploaded');
     }
 
@@ -42,20 +38,44 @@ export class FileUploadService {
       'image/jpg',
       'image/png',
       'application/pdf',
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/ogg',
     ];
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      this.logger.error('Invalid file type');
       throw new HttpException(
         'invalid file type',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
 
-    const maxSize = 10 * 1024 * 1024;
+    let maxSize: number;
+    switch (file.mimetype) {
+      case 'image/jpeg':
+      case 'image/jpg':
+      case 'image/png':
+        maxSize = 2 * 1024 * 1024;
+        break;
+      case 'application/pdf':
+        maxSize = 5 * 1024 * 1024;
+        break;
+      case 'audio/mpeg':
+      case 'audio/mp3':
+      case 'audio/wav':
+      case 'audio/ogg':
+        maxSize = 15 * 1024 * 1024;
+        break;
+      default:
+        throw new HttpException(
+          'invalid file type',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+    }
+
     if (file.size > maxSize) {
-      this.logger.error('File is to large');
       throw new HttpException(
-        'File is to large',
+        'File is too large',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -67,9 +87,9 @@ export class FileUploadService {
 
   deleteFile(filename: string) {
     const filePath = this.extractFilePathFromUrl(filename);
+
     if (!fs.existsSync(filePath)) {
-      this.logger.error('File not found');
-      throw new BadRequestException('File not found');
+      throw new NotFoundException('File not found');
     }
     fs.unlinkSync(filePath);
     return { message: 'File deleted successfully' };
