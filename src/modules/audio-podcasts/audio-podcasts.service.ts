@@ -71,7 +71,7 @@ export class AudioPodcastService {
         );
       }
 
-      await prisma.content.create({
+      const newContent = await prisma.content.create({
         data: {
           type: 'audio',
           title,
@@ -112,6 +112,7 @@ export class AudioPodcastService {
       return {
         status: 'success',
         message: 'Audio successfully uploaded!',
+        data: newContent,
       };
     });
 

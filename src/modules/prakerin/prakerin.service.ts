@@ -57,7 +57,7 @@ export class PrakerinService {
         },
       });
 
-      await prisma.content.create({
+      const newContent = await prisma.content.create({
         data: {
           type: 'prakerin',
           title,
@@ -70,6 +70,7 @@ export class PrakerinService {
               creator_id: userData.student.id,
               pages,
               file_id: fileAttachment.id,
+              published_at: new Date(),
             },
           },
         },
@@ -78,6 +79,7 @@ export class PrakerinService {
       return {
         status: 'success',
         message: 'Prakerin successfully added!',
+        data: newContent,
       };
     });
 
@@ -317,7 +319,7 @@ export class PrakerinService {
           commented_by: comment.user.full_name,
           profile: comment.user.profile,
         })),
-        avg_rating,
+        avg_rating: avg_rating._avg.rating_value,
       },
     };
   }

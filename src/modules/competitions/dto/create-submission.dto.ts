@@ -12,7 +12,12 @@ export class CreateSubmissionDto {
   @IsString()
   competition_slug: string;
 
-  @ApiProperty({ example: 'Audio', enum: ContentType })
+  @ApiProperty({
+    example: 'Audio',
+    enum: ContentType,
+    enumName: 'ContentType',
+    type: ContentType,
+  })
   @IsNotEmpty()
   @IsEnum(ContentType)
   type: ContentType;

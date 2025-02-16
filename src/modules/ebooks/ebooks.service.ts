@@ -57,7 +57,6 @@ export class EbookService {
       });
 
       if (!fileAttachment && !thumbnail) {
-        this.logger.error('Please provide the thumbnail and file ebook!');
         throw new BadRequestException(
           'Please provide the thumbnail and file ebook!',
         );

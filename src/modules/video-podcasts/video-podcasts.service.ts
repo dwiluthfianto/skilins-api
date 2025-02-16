@@ -53,7 +53,7 @@ export class VideoPodcastService {
         );
       }
 
-      await prisma.content.create({
+      const newContent = await prisma.content.create({
         data: {
           type: 'video',
           title,
@@ -92,6 +92,7 @@ export class VideoPodcastService {
       return {
         status: 'success',
         message: 'Video successfully uploaded!',
+        data: newContent,
       };
     });
 

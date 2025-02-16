@@ -200,7 +200,7 @@ export class CompetitionService {
     status: string = ContentStatus.approved,
   ) {
     const competition = await this.prismaService.competition.findUniqueOrThrow({
-      where: { slug, type: type.toUpperCase() as ContentType },
+      where: { slug, type: type as ContentType },
       include: {
         submission: {
           where: {

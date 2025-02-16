@@ -25,68 +25,63 @@ export class SubmissionService {
   ) {
     const { competition_slug, type, audioData, videoData, prakerinData } =
       createSubmissionDto;
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      const competition =
-        await this.prismaService.competition.findUniqueOrThrow({
-          where: { slug: competition_slug },
-        });
-
-      if (new Date() > competition.submission_deadline) {
-        throw new BadRequestException('Submission deadline has passed.');
-      }
-
-      let content;
-
-      if (type === ContentType.audio && audioData) {
-        content = await this.audioPodcastService.createAudioPodcast(
-          userUuid,
-          audioData,
-        );
-      }
-      if (type === ContentType.video && videoData) {
-        content = await this.videoPodcastService.create(userUuid, videoData);
-      }
-      if (type === ContentType.prakerin && prakerinData) {
-        content = await this.prakerinService.createPrakerin(
-          userUuid,
-          prakerinData,
-        );
-      }
-
-      if (!content || competition.type !== content.data.type) {
-        throw new BadRequestException(
-          'Content category does not match competition category.',
-        );
-      }
-      const userData = await prisma.user.findUniqueOrThrow({
-        where: {
-          uuid: userUuid,
-        },
-        include: {
-          student: {
-            select: {
-              uuid: true,
-            },
-          },
-        },
-      });
-
-      const submit = await prisma.submission.create({
-        data: {
-          student: { connect: { uuid: userData.student.uuid } },
-          content: { connect: { uuid: content.data.uuid } },
-          competition: { connect: { slug: competition_slug } },
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'Successfully join the competition.',
-        data: submit,
-      };
+    const competition = await this.prismaService.competition.findUnique({
+      where: { slug: competition_slug },
     });
 
-    return res;
+    if (new Date() > competition.submission_deadline) {
+      throw new BadRequestException('Submission deadline has passed.');
+    }
+
+    let content;
+
+    if (type === ContentType.audio && audioData) {
+      content = await this.audioPodcastService.createAudioPodcast(
+        userUuid,
+        audioData,
+      );
+    }
+    if (type === ContentType.video && videoData) {
+      content = await this.videoPodcastService.create(userUuid, videoData);
+    }
+    if (type === ContentType.prakerin && prakerinData) {
+      content = await this.prakerinService.createPrakerin(
+        userUuid,
+        prakerinData,
+      );
+    }
+
+    if (!content || competition.type !== content.data.type) {
+      throw new BadRequestException(
+        'Content category does not match competition category.',
+      );
+    }
+    const userData = await this.prismaService.user.findUniqueOrThrow({
+      where: {
+        uuid: userUuid,
+      },
+      include: {
+        student: {
+          select: {
+            uuid: true,
+          },
+        },
+      },
+    });
+
+    const submit = await this.prismaService.submission.create({
+      data: {
+        student: { connect: { uuid: userData.student.uuid } },
+        content: { connect: { uuid: content.data.uuid } },
+        competition: { connect: { slug: competition_slug } },
+      },
+    });
+
+    return {
+      status: 'success',
+      message: 'Successfully join the competition.',
+      data: submit,
+    };
   }
 
   async approveSubmission(submissionUuid: string) {

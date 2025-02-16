@@ -56,80 +56,54 @@ export class SubmissionController {
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'thumbnail' }, { name: 'file' }]),
   )
-  @ApiResponse({
-    status: 201,
-    description: 'The record has been successfully created.',
-  })
-  @ApiResponse({ status: 403, description: 'Forbidden.' })
-  @HttpCode(HttpStatus.CREATED)
   async submitToCompetition(
     @Req() req: Request,
     @Res() res: Response,
     @UploadedFiles()
     files: {
-      thumbnail: Express.Multer.File;
-      file: Express.Multer.File;
+      thumbnail?: Express.Multer.File[];
+      file?: Express.Multer.File[];
     },
     @Body() createSubmissionDto: CreateSubmissionDto,
   ) {
     const user = req.user;
 
-    try {
-      // Upload thumbnail if present
-      const thumbnail = this.fileUploadService.handleFileUpload(
-        files.thumbnail,
-      );
+    const thumbnail = this.fileUploadService.handleFileUpload(
+      files.thumbnail[0],
+    );
 
-      switch (createSubmissionDto.type) {
-        case 'audio':
-          createSubmissionDto.audioData.thumbnail = thumbnail.filePath;
-          break;
-        case 'video':
-          createSubmissionDto.videoData.thumbnail = thumbnail.filePath;
-          break;
-        case 'prakerin':
-          createSubmissionDto.prakerinData.thumbnail = thumbnail.filePath;
-          break;
-      }
+    switch (createSubmissionDto.type) {
+      case 'audio':
+        const file_audio = this.fileUploadService.handleFileUpload(
+          files.file[0],
+        );
+        createSubmissionDto.audioData.thumbnail = thumbnail.filePath;
+        createSubmissionDto.audioData.file = file_audio.filePath;
 
-      switch (createSubmissionDto.type) {
-        case 'audio':
-          const file_audio = this.fileUploadService.handleFileUpload(
-            files.file,
-          );
-          createSubmissionDto.audioData.file = file_audio.filePath;
+        break;
 
-          break;
+      case 'video':
+        createSubmissionDto.videoData.thumbnail = thumbnail.filePath;
+        break;
 
-        case 'video':
-          break;
+      case 'prakerin':
+        const file_prakerin = this.fileUploadService.handleFileUpload(
+          files.file[0],
+        );
+        createSubmissionDto.prakerinData.thumbnail = thumbnail.filePath;
+        createSubmissionDto.prakerinData.file = file_prakerin.filePath;
+        break;
 
-        case 'prakerin':
-          const file_prakerin = this.fileUploadService.handleFileUpload(
-            files.file,
-          );
-          createSubmissionDto.prakerinData.file = file_prakerin.filePath;
-          break;
-
-        default:
-          throw new Error('Unsupported submission type');
-      }
-
-      // Proceed to submit to competition
-      const submit = await this.submissionService.submitToCompetition(
-        user['sub'],
-        createSubmissionDto,
-      );
-
-      return res.status(HttpStatus.CREATED).json(submit);
-    } catch (e) {
-      console.error('Error during submission creation:', e.message);
-
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to create submission.',
-        detail: e.message,
-      });
+      default:
+        throw new Error('Unsupported submission type');
     }
+
+    // Proceed to submit to competition
+    const submit = await this.submissionService.submitToCompetition(
+      user['sub'],
+      createSubmissionDto,
+    );
+
+    return res.status(HttpStatus.CREATED).json(submit);
   }
 }

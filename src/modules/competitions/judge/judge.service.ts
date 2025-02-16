@@ -84,7 +84,7 @@ export class JudgeService {
         },
       });
 
-      const newJudge = await prisma.judge.create({
+      await prisma.judge.create({
         data: {
           role: registerJudgeDto.role,
           linkedin: registerJudgeDto.linkedin,
@@ -156,26 +156,44 @@ export class JudgeService {
       },
     });
 
-    await this.prismaService.user.update({
-      where: { uuid: judgeUuid },
-      data: {
-        role: { connect: { name: RoleType.user } },
-      },
-    });
+    const res = await this.prismaService.$transaction(async (prisma) => {
+      await prisma.user.update({
+        where: { uuid: judgeUuid },
+        data: {
+          role: { connect: { name: RoleType.user } },
+        },
+      });
 
-    await this.prismaService.judge.delete({
-      where: { uuid: userJudge.judge.uuid },
-    });
+      await prisma.judge.delete({
+        where: { uuid: userJudge.judge.uuid },
+      });
 
-    return {
-      status: 'success',
-      message: 'judge deleted successfully',
-    };
+      return {
+        status: 'success',
+        message: 'judge deleted successfully',
+      };
+    });
+    return res;
   }
 
   async findAllEvaluationParameter(competitionUuid: string) {
     const parameters = await this.prismaService.evaluationParameter.findMany({
       where: { competition: { uuid: competitionUuid } },
+    });
+
+    const parameterScores = await this.prismaService.score.findMany({
+      where: {
+        parameter: { competition: { uuid: competitionUuid } },
+      },
+      select: {
+        parameter: {
+          select: {
+            uuid: true,
+          },
+        },
+        score: true,
+        notes: true,
+      },
     });
 
     if (!parameters.length) {
@@ -186,7 +204,10 @@ export class JudgeService {
 
     return {
       status: 'success',
-      data: parameters,
+      data: {
+        parameters,
+        parameter_scores: parameterScores,
+      },
     };
   }
 
@@ -196,7 +217,6 @@ export class JudgeService {
   ) {
     const { submission_uuid, parameter_scores } = evaluateSubmissionDto;
 
-    // Cari submission dan validasi kompetisi
     const res = await this.prismaService.$transaction(async (prisma) => {
       const submission = await prisma.submission.findUnique({
         where: { uuid: submission_uuid },
@@ -204,9 +224,7 @@ export class JudgeService {
       });
 
       if (!submission) {
-        throw new NotFoundException(
-          'Submission not found, please make sure you input correct submission',
-        );
+        throw new NotFoundException('Submission not found.');
       }
 
       // Validasi bahwa juri adalah bagian dari kompetisi
@@ -217,7 +235,7 @@ export class JudgeService {
         },
       });
 
-      if (!submission) {
+      if (!judge) {
         throw new ForbiddenException(
           'Judge not registered for this competition!',
         );
@@ -235,23 +253,54 @@ export class JudgeService {
         }
       }
 
-      // Simpan setiap skor parameter ke database
+      // Cek apakah juri sudah pernah memberikan nilai sebelumnya
+      const existingScores = await prisma.score.findMany({
+        where: {
+          judge_id: judge.id,
+          submission_id: submission.id,
+        },
+        select: {
+          id: true,
+          parameter: {
+            select: {
+              id: true,
+              uuid: true,
+            },
+          },
+        },
+      });
+
+      const existingParameterIds = new Set(
+        existingScores.map((score) => score.parameter.uuid),
+      );
+
+      // Perbarui atau buat nilai baru
       const scores = await Promise.all(
         parameter_scores.map(async (param) => {
-          const evaluationParameter =
-            await prisma.evaluationParameter.findUniqueOrThrow({
-              where: { uuid: param.parameter_uuid },
+          if (existingParameterIds.has(param.parameter_uuid)) {
+            return prisma.score.updateMany({
+              where: {
+                judge_id: judge.id,
+                submission_id: submission.id,
+                parameter: { uuid: param.parameter_uuid },
+              },
+              data: {
+                score: param.score,
+                notes: param.notes || null,
+              },
             });
-
-          return prisma.score.create({
-            data: {
-              judge_id: judge.id,
-              submission_id: submission.id,
-              parameter_id: evaluationParameter.id,
-              score: param.score,
-              notes: param.notes || null,
-            },
-          });
+          } else {
+            // Jika belum ada, buat nilai baru
+            return prisma.score.create({
+              data: {
+                judge: { connect: { id: judge.id } },
+                submission: { connect: { id: submission.id } },
+                parameter: { connect: { uuid: param.parameter_uuid } },
+                score: param.score,
+                notes: param.notes || null,
+              },
+            });
+          }
         }),
       );
 
@@ -261,6 +310,8 @@ export class JudgeService {
         data: scores,
       };
     });
+
+    return res;
   }
 
   async getScoredSubmission(competitionUuid: string) {
@@ -377,10 +428,10 @@ export class JudgeService {
     });
 
     return {
-      scoredSubmissions,
-      unscoredSubmissions,
-      totalSubmissions,
-      deadlineJudge,
+      scored: scoredSubmissions,
+      unscored: unscoredSubmissions,
+      total: totalSubmissions,
+      deadline: deadlineJudge,
     };
   }
 
@@ -389,12 +440,20 @@ export class JudgeService {
       where: {
         uuid: userUuid,
       },
-      include: {
+      select: {
+        uuid: true,
+        full_name: true,
+        email: true,
         judge: {
-          include: {
+          select: {
+            uuid: true,
+            role: true,
+            linkedin: true,
+            instagram: true,
             competition: {
               select: {
                 uuid: true,
+                title: true,
               },
             },
           },
