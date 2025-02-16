@@ -331,7 +331,7 @@ model EvaluationParameter {
   id             Int         @id @default(autoincrement())
   uuid           String      @unique @default(uuid())
   competition_id Int
-  parameterName  String
+  parameter_name String
   weight         Float       @default(1)
   created_at     DateTime    @default(now())
   competition    Competition @relation(fields: [competition_id], references: [id], onDelete: Cascade)

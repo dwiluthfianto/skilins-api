@@ -123,7 +123,7 @@ export class JudgeService {
         judge: {
           update: {
             where: {
-              uuid: userJudge.judge[0].uuid,
+              uuid: userJudge.judge.uuid,
             },
             data: {
               role: updateJudgeDto.role,

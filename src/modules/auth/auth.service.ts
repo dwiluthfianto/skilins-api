@@ -14,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import { AuthForgotPasswordDto } from './dto/auth-forgot-password.dto';
 import { AuthResetPasswordDto } from './dto/auth-reset-password.dto';
-import ms from 'ms';
 import { AuthChangePasswordDto } from './dto/auth-change-password.dto';
 import { RoleType, SexType } from '@prisma/client';
 import { AuthRegisterStudentDto } from './dto/auth-register-student.dto';

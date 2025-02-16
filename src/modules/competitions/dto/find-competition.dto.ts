@@ -31,17 +31,17 @@ export class FindCompetitionDto {
   @IsString()
   title?: string;
 
-  @ApiPropertyOptional({
-    type: Boolean,
-    example: true,
-    description: 'Search by the latest of content',
-  })
-  @Transform(({ value }) => {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    return undefined;
-  })
-  @IsOptional()
-  @IsBoolean()
-  status?: boolean;
+  // @ApiPropertyOptional({
+  //   type: Boolean,
+  //   example: true,
+  //   description: 'Search by the latest of content',
+  // })
+  // @Transform(({ value }) => {
+  //   if (value === 'true') return true;
+  //   if (value === 'false') return false;
+  //   return undefined;
+  // })
+  // @IsOptional()
+  // @IsBoolean()
+  // status?: boolean;
 }

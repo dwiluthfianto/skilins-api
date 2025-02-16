@@ -92,14 +92,8 @@ export class GenreController {
     @Body() updateGenreDto: UpdateGenreDto,
     @Res() res: Response,
   ) {
-    const isExist = await this.genreService.findGenreByUuid(genreUuid);
-    if (avatar && avatar.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.avatar,
-        avatar,
-      );
-      updateGenreDto.avatar = file.filePath;
-    }
+    const file = this.fileUploadService.handleFileUpload(avatar);
+    updateGenreDto.avatar = file.filePath;
     const genre = await this.genreService.updateGenreByUuid(
       genreUuid,
       updateGenreDto,
@@ -114,9 +108,6 @@ export class GenreController {
   @ApiOkResponse({ type: Genre })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('genreUuid') genreUuid: string, @Res() res: Response) {
-    const isExist = await this.genreService.findGenreByUuid(genreUuid);
-    this.fileUploadService.deleteFile(isExist.data.avatar);
-
     const result = await this.genreService.removeGenreByUuid(genreUuid);
     return res.status(HttpStatus.OK).json(result);
   }

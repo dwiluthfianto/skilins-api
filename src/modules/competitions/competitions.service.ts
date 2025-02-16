@@ -12,7 +12,6 @@ import competitionFilter from 'src/common/utils/filter/competition-filter';
 
 @Injectable()
 export class CompetitionService {
-  private readonly logger = new Logger(CompetitionService.name);
   constructor(
     private prismaService: PrismaService,
     private readonly slugHelper: SlugHelper,
@@ -29,7 +28,7 @@ export class CompetitionService {
           thumbnail: data.thumbnail,
           title: data.title,
           slug: newSlug,
-          type: data.type,
+          type: data.type as ContentType,
           description: data.description,
           guide: data.guide,
           start_date: data.start_date,
@@ -42,34 +41,30 @@ export class CompetitionService {
       const parameters = parseArrayInput(data.parameters);
 
       if (parameters && parameters.length > 0) {
-        const evaluationParameters = parameters.map((param) => ({
-          competition_id: competition.id,
-          parameterName: param.parameterName,
-          weight: parseInt(param.weight, 10),
-        }));
-
-        await prisma.evaluationParameter.createMany({
-          data: evaluationParameters,
+        parameters.map(async (param) => {
+          await prisma.evaluationParameter.create({
+            data: {
+              competition_id: competition.id,
+              parameter_name: param.parameterName,
+              weight: parseInt(param.weight, 10),
+            },
+          });
         });
       }
 
       if (judge_uuids && judge_uuids.length > 0) {
-        const updateOperations: Prisma.PrismaPromise<any>[] = [];
-
         for (const judge_uuid of judge_uuids) {
           const user = await prisma.user.findUniqueOrThrow({
             where: { uuid: judge_uuid.id },
             select: { judge: { select: { uuid: true } } },
           });
 
-          updateOperations.push(
-            prisma.judge.update({
-              where: { uuid: user.judge.uuid },
-              data: {
-                competition: { connect: { uuid: competition.uuid } },
-              },
-            }),
-          );
+          await prisma.judge.update({
+            where: { uuid: user.judge.uuid },
+            data: {
+              competition_id: competition.id,
+            },
+          });
         }
       }
 
@@ -92,7 +87,7 @@ export class CompetitionService {
           thumbnail: data.thumbnail,
           title: data.title,
           slug: newSlug,
-          type: data.type,
+          type: data.type as ContentType,
           description: data.description,
           guide: data.guide,
           start_date: data.start_date,
@@ -102,44 +97,53 @@ export class CompetitionService {
         },
       });
 
-      if (data.parameters && data.parameters.length > 0) {
-        const evaluationParameters = data.parameters.map((param) => ({
-          competition_id: competition.id,
-          parameterName: param.parameterName,
-          weight: param.weight,
-        }));
+      const parameters = parseArrayInput(data.parameters);
 
-        await prisma.evaluationParameter.updateMany({
-          data: evaluationParameters,
+      if (parameters && parameters.length > 0) {
+        await prisma.evaluationParameter.deleteMany({
+          where: { competition_id: competition.id },
+        });
+
+        for (const param of parameters) {
+          await prisma.evaluationParameter.create({
+            data: {
+              competition_id: competition.id,
+              parameter_name: param.parameterName,
+              weight: parseInt(param.weight, 10),
+            },
+          });
+        }
+      } else {
+        await prisma.evaluationParameter.deleteMany({
+          where: { competition_id: competition.id },
         });
       }
 
       if (judge_uuids && judge_uuids.length > 0) {
-        const updateOperations: Prisma.PrismaPromise<any>[] = [];
-
         for (const judge_uuid of judge_uuids) {
-          const user = await prisma.user.findUniqueOrThrow({
+          const user = await prisma.user.findUnique({
             where: { uuid: judge_uuid.id },
             select: { judge: { select: { uuid: true } } },
           });
 
-          updateOperations.push(
-            prisma.judge.update({
-              where: { uuid: user.judge.uuid },
-              data: {
-                competition: { connect: { uuid: competition.uuid } },
-              },
-            }),
-          );
+          if (!user) {
+            throw new NotFoundException(
+              'Judge not found, please make sure you input correct judge',
+            );
+          }
+
+          await prisma.judge.update({
+            where: { uuid: user.judge.uuid },
+            data: {
+              competition_id: competition.id,
+            },
+          });
         }
       }
 
       return {
         status: 'success',
         message: 'Competition updated successfully!',
-        data: {
-          uuid: competition.uuid,
-        },
       };
     });
 
@@ -147,9 +151,9 @@ export class CompetitionService {
   }
 
   async findAllCompetition(query: FindCompetitionDto) {
-    const { page, limit, type, title, status } = query;
+    const { page, limit, type, title } = query;
 
-    const filter = competitionFilter({ type, title, status });
+    const filter = competitionFilter({ type, title });
 
     const competition = await this.prismaService.competition.findMany({
       ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {}),
@@ -275,6 +279,7 @@ export class CompetitionService {
           include: {
             user: {
               select: {
+                uuid: true,
                 profile: true,
                 full_name: true,
               },
@@ -289,11 +294,11 @@ export class CompetitionService {
       data: {
         ...competition,
         judge: competition.judge.map((item) => ({
-          id: item.uuid,
+          id: item.user.uuid,
           text: item.user.full_name,
         })),
-        evaluation_paramater: competition.evaluation_parameter.map((item) => ({
-          parameterName: item.parameterName,
+        evaluation_parameter: competition.evaluation_parameter.map((item) => ({
+          parameterName: item.parameter_name,
           weight: item.weight,
         })),
       },
@@ -378,7 +383,7 @@ export class CompetitionService {
           select: {
             parameter: {
               select: {
-                parameterName: true,
+                parameter_name: true,
                 weight: true,
                 scores: {
                   select: {

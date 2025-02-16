@@ -37,7 +37,7 @@ export class StudentService {
   async findAllStudent(query: FindStudentDto) {
     const { page, limit, nis, name, major, status, search } = query;
 
-    let filter: Prisma.StudentWhereInput = {};
+    let filter: Prisma.studentWhereInput = {};
 
     if (nis) {
       filter.nis = {

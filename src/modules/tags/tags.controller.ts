@@ -74,7 +74,6 @@ export class TagController {
     return this.tagService.findAll(query);
   }
 
-
   @Get(':name')
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
@@ -94,15 +93,8 @@ export class TagController {
     @Body() updateTagDto: UpdateTagDto,
     @Res() res: Response,
   ) {
-    const isExist = await this.tagService.findOneByUuid(uuid);
-
-    if (avatar && avatar.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.avatar,
-        avatar,
-      );
-      updateTagDto.avatar = file.filePath;
-    }
+    const file = this.fileUploadService.handleFileUpload(avatar);
+    updateTagDto.avatar = file.filePath;
     const tag = await this.tagService.update(uuid, updateTagDto);
 
     return res.status(HttpStatus.OK).json(tag);
@@ -114,9 +106,6 @@ export class TagController {
   @ApiOkResponse({ type: Tag })
   @HttpCode(HttpStatus.OK)
   async remove(@Param('uuid') uuid: string, @Res() res: Response) {
-    const isExist = await this.tagService.findOneByUuid(uuid);
-    this.fileUploadService.deleteFile(isExist.data.avatar);
-
     const result = await this.tagService.remove(uuid);
     return res.status(HttpStatus.OK).json(result);
   }

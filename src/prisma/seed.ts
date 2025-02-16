@@ -1,7 +1,6 @@
 import { PrismaClient, RoleType, SexType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
-
-// Constants
 const DEFAULT_IMAGE_URL =
   'https://images.unsplash.com/photo-1494537176433-7a3c4ef2046f?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -29,27 +28,31 @@ async function seedRoles() {
 }
 
 // Seed Users
+const adminPass = bcrypt.hash('sIc1l1ns', 10);
+const staffPass = bcrypt.hash('@staff.skilins106', 10);
+const studentPass = bcrypt.hash('@student.skilins106', 10);
+
 async function seedUsers() {
   const users = [
     {
       uuid: '33af070e-9cde-4024-8e90-fbfef6b39640',
       email: 'admin@skilins.com',
       full_name: 'admin Skilins',
-      password: '$2a$10$nKlySD74S5zVXiL9jGlpJOO4RQivq.q11R2tELbLeb38Y2wgfMHOG',
+      password: adminPass,
       role: RoleType.admin,
     },
     {
       uuid: '38ebdc87-dca6-441b-9acf-08dda606eef4',
       email: 'staff@skilins.com',
       full_name: 'staff Skilins',
-      password: '$2a$10$ikS7HR5PmR4nhZ1YE2M3zeCSFmAXSaPdVjOqDuvR62TgfiYvmbes6',
+      password: staffPass,
       role: RoleType.staff,
     },
     {
       uuid: '76301743-844a-4f11-85b7-a1ffa87784de',
       email: 'student@skilins.com',
       full_name: 'student Skilins',
-      password: '$2a$10$X4ynU9Zt9WDk58jkqQyiFepxlBUZ9GP3F6vITECa9MS3YS63kvoby',
+      password: studentPass,
       role: RoleType.student,
     },
   ];
@@ -77,27 +80,47 @@ async function seedUsers() {
 // Seed Majors
 async function seedMajors() {
   const majors = [
-    'Pengembangan Perangkat Lunak dan Gim',
-    'Kimia Industri',
-    'Teknik Pengelasan',
-    'Teknik Pemesinan',
-    'Teknik Elektronika',
+    {
+      name: 'Pengembangan Perangkat Lunak dan Gim',
+      image: `${process.env.BACKEND_DOMAIN}/public/1739688703173-cropped-LOGO-SKIEL-1.png`,
+      avatar: `${process.env.BACKEND_DOMAIN}/public/perangkat-lunak.jpg`,
+    },
+    {
+      name: 'Kimia Industri',
+      image: `${process.env.BACKEND_DOMAIN}/public/1739688703173-cropped-LOGO-SKIEL-1.png`,
+      avatar: `${process.env.BACKEND_DOMAIN}/public/kimia.jpg`,
+    },
+    {
+      name: 'Teknik Pengelasan',
+      image: `${process.env.BACKEND_DOMAIN}/public/1739688703173-cropped-LOGO-SKIEL-1.png`,
+      avatar: `${process.env.BACKEND_DOMAIN}/public/pengelasan.jpg`,
+    },
+    {
+      name: 'Teknik Pemesinan',
+      image: `${process.env.BACKEND_DOMAIN}/public/1739688703173-cropped-LOGO-SKIEL-1.png`,
+      avatar: `${process.env.BACKEND_DOMAIN}/public/teknik.jpg`,
+    },
+    {
+      name: 'Teknik Elektronika',
+      image: `${process.env.BACKEND_DOMAIN}/public/1739688703173-cropped-LOGO-SKIEL-1.png`,
+      avatar: `${process.env.BACKEND_DOMAIN}/public/elektro.jpg`,
+    },
   ];
 
   await Promise.all(
-    majors.map((name) =>
+    majors.map((major) =>
       prisma.major.upsert({
-        where: { name },
+        where: { name: major.name },
         update: {
-          avatar: DEFAULT_IMAGE_URL,
-          image: DEFAULT_IMAGE_URL,
-          name,
+          avatar: major.avatar,
+          image: major.image,
+          name: major.name,
           description: 'No description available!',
         },
         create: {
-          avatar: DEFAULT_IMAGE_URL,
-          image: DEFAULT_IMAGE_URL,
-          name,
+          avatar: major.avatar,
+          image: major.image,
+          name: major.name,
           description: 'No description available!',
         },
       }),

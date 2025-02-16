@@ -24,22 +24,9 @@ function competitionFilter({ title, status, type }: CompetitionFilter) {
       }
     : {};
 
-  const filterStatus = status
-    ? {
-        end_date: {
-          gte: new Date(),
-        },
-      }
-    : {
-        end_date: {
-          lt: new Date(),
-        },
-      };
-
   return {
     ...filterTitle,
     ...filterType,
-    ...filterStatus,
   };
 }
 

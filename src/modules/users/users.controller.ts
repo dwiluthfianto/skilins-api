@@ -63,15 +63,11 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   async updateProfile(
     @Param('uuid') uuid: string,
-    @UploadedFile() profile: Express.Multer.File,
+    @UploadedFile('profile') profile: Express.Multer.File,
     @Res() res: Response,
   ) {
-    const user = await this.userService.findOne(uuid);
     try {
-      const file = this.fileUploadService.updateFile(
-        user.data.profile,
-        profile,
-      );
+      const file = this.fileUploadService.handleFileUpload(profile);
 
       const result = await this.userService.updateProfile(uuid, file.filePath);
       return res.status(HttpStatus.OK).json(result);

@@ -186,6 +186,22 @@ export class BlogService {
       },
     });
 
+    const contentLatest = await this.prismaService.content.findMany({
+      skip: 1,
+      take: 5,
+      where: {
+        type: 'blog',
+        created_at: { gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30) },
+      },
+      include: {
+        blog: {
+          include: {
+            creator: true,
+          },
+        },
+      },
+    });
+
     const avg_rating = await this.prismaService.rating.aggregate({
       where: { content_id: content.id },
       _avg: {
@@ -212,6 +228,7 @@ export class BlogService {
           profile: comment.user.profile,
         })),
         avg_rating,
+        latest_blogs: contentLatest,
       },
     };
   }
