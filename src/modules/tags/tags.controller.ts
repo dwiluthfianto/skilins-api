@@ -13,6 +13,7 @@ import {
   UploadedFile,
   Res,
   Query,
+  UploadedFiles,
 } from '@nestjs/common';
 import { TagService } from './tags.service';
 import { CreateTagDto } from './dto/create-tag.dto';
@@ -27,12 +28,16 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { Tag } from './entities/tag.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import { FindTagDto } from './dto/find-tag.dto';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 @ApiTags('Tag')
 @ApiBearerAuth('JWT-auth')
 @Controller({ path: 'tags', version: '1' })
@@ -43,70 +48,103 @@ export class TagController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiCreatedResponse({ type: Tag })
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async create(
-    @UploadedFile()
-    avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() createTagDto: CreateTagDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(avatar);
-    createTagDto.avatar = file.filePath;
-    const result = await this.tagService.create(createTagDto);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      await this.tagService.create({
+        ...createTagDto,
+        avatar: file.filePath,
+      });
 
-    return res.status(HttpStatus.CREATED).json(result);
+      return SuccessResponse.create(
+        null,
+        'Tag created successfully',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({ type: Tag })
-  @HttpCode(HttpStatus.OK)
+  @Public()
   @ApiQuery({
     name: 'search',
     required: false,
     type: String,
     description: 'search by name for categories',
   })
-  findAll(@Query() query: FindTagDto) {
-    return this.tagService.findAll(query);
+  async getTags(@Query() query: FindTagDto) {
+    const { data, pagination } = await this.tagService.findAll(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Tags fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':name')
-  @ApiOkResponse({ type: Tag })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('name') name: string) {
-    return this.tagService.findOneByName(name);
+  @Public()
+  async getTagByName(@Param('name') name: string) {
+    return SuccessResponse.create(
+      await this.tagService.findOneByName(name),
+      'Tag fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':uuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiOkResponse({ type: Tag })
+  @FileUpload()
   async update(
     @Param('uuid') uuid: string,
-    @UploadedFile()
-    avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() updateTagDto: UpdateTagDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(avatar);
-    updateTagDto.avatar = file.filePath;
-    const tag = await this.tagService.update(uuid, updateTagDto);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      await this.tagService.updateTag(uuid, {
+        ...updateTagDto,
+        avatar: file.filePath,
+      });
 
-    return res.status(HttpStatus.OK).json(tag);
+      return SuccessResponse.create(
+        null,
+        'Tag updated successfully',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Delete(':uuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({ type: Tag })
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string, @Res() res: Response) {
-    const result = await this.tagService.remove(uuid);
-    return res.status(HttpStatus.OK).json(result);
+  async remove(@Param('uuid') uuid: string) {
+    try {
+      await this.tagService.removeTag(uuid);
+      return SuccessResponse.create(
+        null,
+        'Tag deleted successfully',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

@@ -10,27 +10,16 @@ export class GenreService {
   async createGenre(createGenreDto: CreateGenreDto) {
     const { avatar, name, description } = createGenreDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await prisma.genre.create({
-        data: {
-          name,
-          avatar:
-            avatar ||
-            'https://images.unsplash.com/photo-1494537176433-7a3c4ef2046f?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-          description: description || 'No description available.',
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'Genre successfully added!',
-      };
+    await this.prismaService.genre.create({
+      data: {
+        name,
+        avatar,
+        description: description || 'No description available.',
+      },
     });
-
-    return res;
   }
 
-  async findAll(query: FindGenreDto) {
+  async findAllGenre(query: FindGenreDto) {
     const { page, limit, name } = query;
 
     const filterName = {
@@ -54,7 +43,6 @@ export class GenreService {
     });
 
     return {
-      status: 'success',
       data: genre,
       pagination: {
         page,
@@ -76,11 +64,9 @@ export class GenreService {
       );
     }
 
-    return {
-      status: 'success',
-      data: genre,
-    };
+    return genre;
   }
+
   async findGenreByUuid(genreUuid: string) {
     const genre = await this.prismaService.genre.findUniqueOrThrow({
       where: { uuid: genreUuid },
@@ -92,52 +78,29 @@ export class GenreService {
       );
     }
 
-    return {
-      status: 'success',
-      data: genre,
-    };
+    return genre;
   }
 
   async updateGenreByUuid(genreUuid: string, updateGenreDto: UpdateGenreDto) {
     const { avatar, name, description } = updateGenreDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.findGenreByUuid(genreUuid);
+    await this.findGenreByUuid(genreUuid);
 
-      await prisma.genre.update({
-        where: { uuid: genreUuid },
-        data: {
-          name,
-          avatar:
-            avatar ||
-            'https://images.unsplash.com/photo-1494537176433-7a3c4ef2046f?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-          description: description || 'No description available.',
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'Genre successfully updated!',
-      };
+    await this.prismaService.genre.update({
+      where: { uuid: genreUuid },
+      data: {
+        name,
+        avatar,
+        description: description || 'No description available.',
+      },
     });
-
-    return res;
   }
 
   async removeGenreByUuid(genreUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.findGenreByUuid(genreUuid);
+    await this.findGenreByUuid(genreUuid);
 
-      await prisma.genre.delete({
-        where: { uuid: genreUuid },
-      });
-
-      return {
-        status: 'success',
-        message: 'Genre successfully deleted!',
-      };
+    await this.prismaService.genre.delete({
+      where: { uuid: genreUuid },
     });
-
-    return res;
   }
 }

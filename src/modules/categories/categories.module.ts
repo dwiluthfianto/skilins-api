@@ -1,14 +1,14 @@
-import { Logger, Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { CategoryService } from './categories.service';
 import { CategoryController } from './categories.controller';
-import { PrismaModule } from 'src/prisma/prisma.module';
 
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
 import { FileUploadService } from '../file-upload/file-upload.service';
 
+@Global()
 @Module({
   controllers: [CategoryController],
-  providers: [CategoryService, UuidHelper, FileUploadService, Logger],
-  imports: [PrismaModule],
+  providers: [CategoryService, FileUploadService],
+  imports: [],
+  exports: [CategoryService],
 })
 export class CategoryModule {}

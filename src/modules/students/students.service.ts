@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -12,26 +12,17 @@ export class StudentService {
     const { nis, name, major, birthplace, birthdate, sex, user_uuid } =
       createStudentDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await prisma.student.create({
-        data: {
-          nis,
-          name,
-          birthdate,
-          birthplace,
-          sex,
-          user: { connect: { uuid: user_uuid } },
-          major: { connect: { name: major } },
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'student succesfully added!',
-      };
+    await this.prismaService.student.create({
+      data: {
+        nis,
+        name,
+        birthdate,
+        birthplace,
+        sex,
+        user: { connect: { uuid: user_uuid } },
+        major: { connect: { name: major } },
+      },
     });
-
-    return res;
   }
 
   async findAllStudent(query: FindStudentDto) {
@@ -96,7 +87,6 @@ export class StudentService {
     });
 
     return {
-      status: 'success',
       data: student,
       pagination: {
         page,
@@ -114,66 +104,49 @@ export class StudentService {
     });
 
     return {
-      status: 'success',
-      data: {
-        uuid: student.uuid,
-        nis: student.nis,
-        name: student.name,
-        birthplace: student.birthplace,
-        birthdate: student.birthdate,
-        sex: student.sex,
-        major: student.major.name,
-        status: student.status,
-      },
+      uuid: student.uuid,
+      nis: student.nis,
+      name: student.name,
+      birthplace: student.birthplace,
+      birthdate: student.birthdate,
+      sex: student.sex,
+      major: student.major.name,
+      status: student.status,
     };
   }
 
   async update(uuid: string, updateStudentDto: UpdateStudentDto) {
     const { nis, name, major, birthplace, birthdate, sex } = updateStudentDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await prisma.major.findUniqueOrThrow({
-        where: { name: major },
-      });
-      await prisma.student.findUniqueOrThrow({ where: { uuid } });
-
-      await prisma.student.update({
-        where: { uuid },
-        data: {
-          nis,
-          name,
-          birthdate,
-          birthplace,
-          sex,
-          major: { connect: { name: major } },
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'student succesfully updated!',
-      };
+    await this.prismaService.major.findUnique({
+      where: { name: major },
     });
 
-    return res;
+    if (!major) {
+      throw new NotFoundException('Major not found');
+    }
+
+    await this.prismaService.student.update({
+      where: { uuid },
+      data: {
+        nis,
+        name,
+        birthdate,
+        birthplace,
+        sex,
+        major: { connect: { name: major } },
+      },
+    });
   }
 
   async remove(uuid: string) {
-    await this.prismaService.student.findUniqueOrThrow({
-      where: { uuid },
-    });
     await this.prismaService.student.delete({
       where: { uuid },
     });
-
-    return {
-      status: 'success',
-      message: 'student succesfully deleted',
-    };
   }
 
   async verifiedStudent(uuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const student = await prisma.student.findUniqueOrThrow({
         where: { uuid },
       });
@@ -193,13 +166,6 @@ export class StudentService {
           role: { connect: { name: RoleType.student } },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'student verified!',
-      };
     });
-
-    return res;
   }
 }

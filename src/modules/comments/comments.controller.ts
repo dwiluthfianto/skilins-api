@@ -1,17 +1,25 @@
-import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  HttpStatus,
+} from '@nestjs/common';
 import { CommentService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { DeleteCommentDto } from './dto/delete-comment.dto';
+import { ApiException } from '@exceptions/api-exception';
+import { SuccessResponse } from '@utils/api-response.util';
 
 @ApiTags('Like & Comment')
 @Controller({ path: 'comments', version: '1' })
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(RolesGuard)
 @ApiBasicAuth('JWT-auth')
-@Roles('User', 'student', 'judge', 'staff')
+@Roles('user', 'student', 'judge', 'staff')
 export class CommentController {
   constructor(private readonly commentsService: CommentService) {}
 
@@ -20,19 +28,32 @@ export class CommentController {
     @Param('uuid') uuid: string,
     @Body() createCommentDto: CreateCommentDto,
   ) {
-    return this.commentsService.createComment(uuid, createCommentDto);
+    try {
+      await this.commentsService.createComment(uuid, createCommentDto);
+      return SuccessResponse.create(
+        null,
+        'Comment successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
-  // @Patch(':id')
-  // update(@Param('id') id: string, @Body() updateCommentDto: UpdateCommentDto) {
-  //   return this.commentsService.update(+id, updateCommentDto);
-  // }
-
   @Post(':uuid/remove')
-  remove(
+  async remove(
     @Param('uuid') contentUuid: string,
     @Body() deleteCommentDto: DeleteCommentDto,
   ) {
-    return this.commentsService.removeComment(contentUuid, deleteCommentDto);
+    try {
+      await this.commentsService.removeComment(contentUuid, deleteCommentDto);
+      return SuccessResponse.create(
+        null,
+        'Comment successfully removed!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

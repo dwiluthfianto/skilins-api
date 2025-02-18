@@ -16,7 +16,7 @@ import { UserService } from './users.service';
 import { RoleUserDto } from './dto/role-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';

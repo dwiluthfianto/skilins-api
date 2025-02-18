@@ -6,9 +6,7 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
   HttpStatus,
-  UseInterceptors,
   UseGuards,
   UploadedFiles,
   Query,
@@ -18,21 +16,16 @@ import {
 import { AudioPodcastService } from './audio-podcasts.service';
 import { CreateAudioPodcastDto } from './dto/create-audio-podcast.dto';
 import { UpdateAudioPodcastDto } from './dto/update-audio-podcast.dto';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { AudioPodcast } from './entities/audio-podcast.entity';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { Request, Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { ApiException } from '@exceptions/api-exception';
+import { SuccessResponse } from '@utils/api-response.util';
+import { Public } from '@decorators/public.decorator';
 
 @ApiTags('Audios')
 @ApiBearerAuth('JWT-auth')
@@ -44,18 +37,9 @@ export class AudioPodcastController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
-  @ApiCreatedResponse({
-    type: AudioPodcast,
-  })
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async createAudioPodcast(
     @UploadedFiles()
     files: {
@@ -64,99 +48,115 @@ export class AudioPodcastController {
     },
     @Body() createAudioPodcastDto: CreateAudioPodcastDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
-    const thumbnail = this.fileUploadService.handleFileUpload(
-      files.thumbnail[0],
-    );
-    createAudioPodcastDto.thumbnail = thumbnail.filePath;
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
 
-    const file = this.fileUploadService.handleFileUpload(files.file[0]);
-    createAudioPodcastDto.file = file.filePath;
+      const file = this.fileUploadService.handleFileUpload(files.file[0]);
 
-    const result = await this.audioPodcastService.createAudioPodcast(
-      user['sub'],
-      createAudioPodcastDto,
-    );
-    return res.status(HttpStatus.CREATED).json(result);
+      await this.audioPodcastService.createAudioPodcast(user['sub'], {
+        ...createAudioPodcastDto,
+        thumbnail: thumbnail?.filePath,
+        file: file?.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Audio created successfully',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: AudioPodcast,
-    isArray: true,
-  })
-  @HttpCode(HttpStatus.OK)
-  getAllAudioByUser(@Query() query: FindContentQueryDto) {
-    return this.audioPodcastService.findAllAudioByUser(query);
+  @Public()
+  async getAllAudioByUser(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.audioPodcastService.findAllAudioByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Audio fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  summaryAudioStudent(@Req() req: Request) {
+  async summaryAudioStudent(@Req() req: Request) {
     const user = req.user;
 
-    return this.audioPodcastService.summaryAudioStudent(user['sub']);
+    return SuccessResponse.create(
+      await this.audioPodcastService.summaryAudioStudent(user['sub']),
+      'Audio summary fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  summaryAudioStaff() {
-    return this.audioPodcastService.summaryAudioStaff();
+  async summaryAudioStaff() {
+    return SuccessResponse.create(
+      await this.audioPodcastService.summaryAudioStaff(),
+      'Audio summary fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('staff')
-  @ApiOkResponse({
-    type: AudioPodcast,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  getAllAudioByStaff(@Query() query: FindContentQueryDto) {
-    return this.audioPodcastService.findAllAudioByStaff(query);
+  async getAllAudioByStaff(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.audioPodcastService.findAllAudioByStaff(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Audio fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('student')
-  @ApiOkResponse({
-    type: AudioPodcast,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  @HttpCode(HttpStatus.OK)
-  findUserAudio(@Req() req: Request, @Query() query: FindContentQueryDto) {
+  async findUserAudio(
+    @Req() req: Request,
+    @Query() query: FindContentQueryDto,
+  ) {
     const user = req.user;
-    return this.audioPodcastService.fetchUserAudios(user['sub'], query);
+    const { data, pagination } = await this.audioPodcastService.fetchUserAudios(
+      user['sub'],
+      query,
+    );
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Audio fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
-  @ApiOkResponse({
-    type: AudioPodcast,
-  })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('slug') slug: string) {
-    return this.audioPodcastService.findAudioBySlug(slug);
+  @Public()
+  async getAudioBySlug(@Param('slug') slug: string) {
+    return SuccessResponse.create(
+      await this.audioPodcastService.findAudioBySlug(slug),
+      'Audio fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':contentUuid')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
-  @ApiOkResponse({
-    type: AudioPodcast,
-  })
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async update(
     @Param('contentUuid') contentUuid: string,
     @UploadedFiles()
@@ -169,53 +169,62 @@ export class AudioPodcastController {
     @Res() res: Response,
   ) {
     const user = req.user;
-    const currentAudio =
-      await this.audioPodcastService.findAudioByUuid(contentUuid);
+    try {
+      const currentAudio =
+        await this.audioPodcastService.findAudioByUuid(contentUuid);
 
-    if (files.thumbnail && files.thumbnail.length > 0) {
-      const thumbnail = this.fileUploadService.updateFile(
-        currentAudio.data.thumbnail,
-        files.thumbnail[0],
+      const thumbnail =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.updateFile(
+              currentAudio.thumbnail,
+              files.thumbnail[0],
+            )
+          : { filePath: currentAudio.thumbnail };
+
+      const file =
+        files.file && files.file[0]
+          ? this.fileUploadService.updateFile(
+              currentAudio.audio_podcast.file_attachment.file,
+              files.file[0],
+            )
+          : { filePath: currentAudio.audio_podcast.file_attachment.file };
+
+      await this.audioPodcastService.updateAudioByUuid(
+        contentUuid,
+        user['sub'],
+        {
+          ...updateAudioPodcastDto,
+          thumbnail: thumbnail.filePath,
+          file: file.filePath,
+        },
       );
-      updateAudioPodcastDto.thumbnail = thumbnail.filePath;
-    }
 
-    if (files.file && files.file.length > 0) {
-      const file = this.fileUploadService.updateFile(
-        currentAudio.data.audio_podcast.file_attachment.file,
-        files.file[0],
+      return SuccessResponse.create(
+        null,
+        'Audio updated successfully',
+        HttpStatus.OK,
       );
-      updateAudioPodcastDto.file = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    const updatedAudio = await this.audioPodcastService.updateAudioByUuid(
-      contentUuid,
-      user['sub'],
-      updateAudioPodcastDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedAudio);
   }
 
   @Delete(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
-  @ApiOkResponse({
-    type: AudioPodcast,
-  })
-  @HttpCode(HttpStatus.OK)
-  async remove(
-    @Param('contentUuid') contentUuid: string,
-    @Res() res: Response,
-  ) {
+  async remove(@Param('contentUuid') contentUuid: string) {
     const isExist = await this.audioPodcastService.findAudioByUuid(contentUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+    this.fileUploadService.deleteFile(isExist.thumbnail);
     this.fileUploadService.deleteFile(
-      isExist.data.audio_podcast.file_attachment.file,
+      isExist.audio_podcast.file_attachment.file,
     );
 
-    const audio = await this.audioPodcastService.removeAudioByUuid(contentUuid);
+    await this.audioPodcastService.removeAudioByUuid(contentUuid);
 
-    return res.status(HttpStatus.OK).json(audio);
+    return SuccessResponse.create(
+      null,
+      'Audio deleted successfully',
+      HttpStatus.OK,
+    );
   }
 }

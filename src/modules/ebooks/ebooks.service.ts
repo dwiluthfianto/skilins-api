@@ -7,28 +7,20 @@ import {
 import { CreateEbookDto } from './dto/create-ebook.dto';
 import { UpdateEbookDto } from './dto/update-ebook.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import { ContentStatus, Prisma } from '@prisma/client';
-import parseArrayInput from 'src/common/utils/parse-array';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
+import { ContentStatus } from '@prisma/client';
+import parseArrayInput from '@utils/parse-array.util';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
-import {
-  contentFilter,
-  contentFilterByUser,
-} from 'src/common/utils/filter/content-filter';
+import { contentFilterByUser } from '@utils/content-filter.util';
 
 @Injectable()
 export class EbookService {
   constructor(
-    private readonly logger: Logger,
     private prismaService: PrismaService,
-    private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
-  ) {
-    this.logger = new Logger('Ebook Logger');
-  }
+  ) {}
 
-  async create(createContentDto: CreateEbookDto) {
+  async createEbook(createContentDto: CreateEbookDto) {
     const {
       title,
       thumbnail,
@@ -44,7 +36,7 @@ export class EbookService {
       genres,
     } = createContentDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
@@ -116,14 +108,7 @@ export class EbookService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Ebook successfully uploaded!',
-      };
     });
-
-    return res;
   }
 
   async findAllEbookByUser(findContentQueryDto: FindContentQueryDto) {
@@ -187,7 +172,6 @@ export class EbookService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -199,7 +183,7 @@ export class EbookService {
   }
 
   async findEbookByUuid(contentUuid: string) {
-    const content = await this.prismaService.content.findUniqueOrThrow({
+    return await this.prismaService.content.findUniqueOrThrow({
       where: { type: 'ebook', uuid: contentUuid },
       include: {
         ebook: {
@@ -209,11 +193,6 @@ export class EbookService {
         },
       },
     });
-
-    return {
-      status: 'success',
-      data: content,
-    };
   }
   async findEbookBySlug(slug: string) {
     const content = await this.prismaService.content.findUniqueOrThrow({
@@ -249,25 +228,16 @@ export class EbookService {
       },
     });
     return {
-      status: 'success',
-      data: {
-        ...content,
-        tag: content.tag.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        genre: content.genre.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comments: content.comment.map((comment) => ({
-          ...comment,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile,
-        })),
-        avg_rating: avg_rating._avg.rating_value,
-      },
+      ...content,
+      tag: content.tag.map((tag) => ({
+        id: tag.uuid,
+        text: tag.name,
+      })),
+      genre: content.genre.map((genre) => ({
+        id: genre.uuid,
+        text: genre.name,
+      })),
+      avg_rating: avg_rating._avg.rating_value,
     };
   }
 
@@ -290,7 +260,7 @@ export class EbookService {
       genres,
     } = updateContentDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const content = await prisma.content.findUnique({
         where: {
           uuid: contentUuid,
@@ -312,8 +282,13 @@ export class EbookService {
           'Content not found, please make sure you input correct content',
         );
       }
-      const category =
-        await this.uuidHelper.validateUuidCategory(category_name);
+      const category = await this.prismaService.category.findUnique({
+        where: { uuid: category_name },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Category not found');
+      }
 
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
@@ -372,29 +347,20 @@ export class EbookService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Ebook successfully updated!',
-      };
     });
-
-    return res;
   }
 
   async removeEbookByUuid(contentUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.uuidHelper.validateUuidContent(contentUuid);
-
-      await prisma.content.delete({
-        where: { uuid: contentUuid },
-      });
-      return {
-        status: 'success',
-        message: 'Ebook successfully deleted!',
-      };
+    const content = await this.prismaService.content.findUnique({
+      where: { uuid: contentUuid },
     });
 
-    return res;
+    if (!content) {
+      throw new NotFoundException('Content not found');
+    }
+
+    await this.prismaService.content.delete({
+      where: { uuid: contentUuid },
+    });
   }
 }

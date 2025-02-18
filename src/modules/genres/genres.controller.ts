@@ -13,6 +13,7 @@ import {
   UploadedFile,
   Query,
   Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { GenreService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
@@ -27,12 +28,16 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Genre } from './entities/genre.entity';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
 import { FindGenreDto } from './dto/find-genre.dto';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 @ApiTags('Genre')
 @ApiBasicAuth('JWT-auth')
 @Controller({ path: 'genres', version: '1' })
@@ -43,25 +48,35 @@ export class GenreController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiCreatedResponse({ type: Genre })
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async create(
-    @UploadedFile()
-    avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() createGenreDto: CreateGenreDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(avatar);
-    createGenreDto.avatar = file.filePath;
-    const result = await this.genreService.createGenre(createGenreDto);
-    return res.status(HttpStatus.CREATED).json(result);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
+
+      await this.genreService.createGenre({
+        ...createGenreDto,
+        avatar: file.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Genre successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({ type: Genre })
+  @Public()
   @ApiQuery({
     name: 'search',
     required: false,
@@ -69,46 +84,67 @@ export class GenreController {
     description: 'search by name for categories',
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query() query: FindGenreDto) {
-    return this.genreService.findAll(query);
+  async getGenres(@Query() query: FindGenreDto) {
+    const { data, pagination } = await this.genreService.findAllGenre(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Genre successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':name')
-  @ApiOkResponse({ type: Genre })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('name') name: string) {
-    return this.genreService.findGenreByName(name);
+  @Public()
+  async getGenreByName(@Param('name') name: string) {
+    return SuccessResponse.create(
+      await this.genreService.findGenreByName(name),
+      'Genre successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':genreUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiOkResponse({ type: Genre })
-  @HttpCode(HttpStatus.OK)
-  async update(
+  @FileUpload()
+  async updateGenre(
     @Param('genreUuid') genreUuid: string,
-    @UploadedFile() avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() updateGenreDto: UpdateGenreDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(avatar);
-    updateGenreDto.avatar = file.filePath;
-    const genre = await this.genreService.updateGenreByUuid(
-      genreUuid,
-      updateGenreDto,
-    );
-
-    return res.status(HttpStatus.OK).json(genre);
+    try {
+      const avatar = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      await this.genreService.updateGenreByUuid(genreUuid, {
+        ...updateGenreDto,
+        avatar: avatar.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Genre successfully updated!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Delete(':genreUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({ type: Genre })
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('genreUuid') genreUuid: string, @Res() res: Response) {
-    const result = await this.genreService.removeGenreByUuid(genreUuid);
-    return res.status(HttpStatus.OK).json(result);
+  async removeGenre(@Param('genreUuid') genreUuid: string) {
+    try {
+      await this.genreService.removeGenreByUuid(genreUuid);
+      return SuccessResponse.create(
+        null,
+        'Genre successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

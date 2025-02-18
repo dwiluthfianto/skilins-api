@@ -7,32 +7,25 @@ import {
   Param,
   Delete,
   UseGuards,
-  UseInterceptors,
-  HttpCode,
   HttpStatus,
   UploadedFiles,
   Query,
   Req,
-  Res,
 } from '@nestjs/common';
 import { PrakerinService } from './prakerin.service';
 import { CreatePrakerinDto } from './dto/create-prakerin.dto';
 import { UpdatePrakerinDto } from './dto/update-prakerin.dto';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
+import { ApiBearerAuth, ApiCreatedResponse, ApiTags } from '@nestjs/swagger';
 import { Prakerin } from './entities/prakerin.entity';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Request, Response } from 'express';
-import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
+import { FindPrakerinQueryDto } from '@modules/contents/dto/find-prakerin-query.dto';
+import { Request } from 'express';
 
 @ApiTags('Prakerin')
 @ApiBearerAuth('JWT-auth')
@@ -44,19 +37,13 @@ export class PrakerinController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
   @ApiCreatedResponse({
     type: Prakerin,
   })
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
-  @ApiConsumes('multipart/form-data')
-  async create(
+  @FileUpload()
+  async createPrakerin(
     @UploadedFiles()
     files: {
       thumbnail?: Express.Multer.File[];
@@ -64,92 +51,97 @@ export class PrakerinController {
     },
     @Body() createPrakerinDto: CreatePrakerinDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
-    const thumbnail = this.fileUploadService.handleFileUpload(
-      files.thumbnail[0],
-    );
-    createPrakerinDto.thumbnail = thumbnail.filePath;
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
 
-    const file_prakerin = this.fileUploadService.handleFileUpload(
-      files.file[0],
-    );
-    createPrakerinDto.file = file_prakerin.filePath;
+      const file_prakerin = this.fileUploadService.handleFileUpload(
+        files.file[0],
+      );
 
-    const result = await this.prakerinService.createPrakerin(
-      user['sub'],
-      createPrakerinDto,
-    );
-    return res.status(HttpStatus.CREATED).json(result);
+      await this.prakerinService.createPrakerin(user['sub'], {
+        ...createPrakerinDto,
+        thumbnail: thumbnail.filePath,
+        file: file_prakerin.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Prakerin successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: Prakerin,
-    isArray: true,
-  })
-  @HttpCode(HttpStatus.OK)
-  findAllByUser(@Query() query: FindPrakerinQueryDto) {
-    return this.prakerinService.findAllPrakerinByUser(query);
+  @Public()
+  async getPrakerin(@Query() query: FindPrakerinQueryDto) {
+    const { data, pagination } =
+      await this.prakerinService.findAllPrakerinByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Prakerin successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('staff')
-  @ApiOkResponse({
-    type: Prakerin,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  findAllByStaff(@Query() query: FindPrakerinQueryDto) {
-    return this.prakerinService.findAllPrakerinByStaff(query);
+  async getPrakerinByStaff(@Query() query: FindPrakerinQueryDto) {
+    const { data, pagination } =
+      await this.prakerinService.findAllPrakerinByStaff(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Prakerin successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  summaryPrakerinStaff() {
-    return this.prakerinService.summaryPrakerinStaff();
+  async summaryPrakerinStaff() {
+    return SuccessResponse.create(
+      await this.prakerinService.summaryPrakerinStaff(),
+      'Prakerin summary successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('student')
-  @ApiOkResponse({
-    type: Prakerin,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  @HttpCode(HttpStatus.OK)
   async findUserPrakerin(@Req() req: Request) {
     const user = req.user;
-    return await this.prakerinService.fetchUserPrakerin(user['sub']);
+    return SuccessResponse.create(
+      await this.prakerinService.fetchUserPrakerin(user['sub']),
+      'Prakerin successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
-  @ApiOkResponse({
-    type: Prakerin,
-  })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('slug') slug: string) {
-    return this.prakerinService.findPrakerinBySlug(slug);
+  @Public()
+  async getPrakerinBySlug(@Param('slug') slug: string) {
+    return SuccessResponse.create(
+      await this.prakerinService.findPrakerinBySlug(slug),
+      'Prakerin successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':uuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
-  @ApiOkResponse({
-    type: Prakerin,
-  })
-  @ApiConsumes('multipart/form-data')
-  async update(
+  @FileUpload()
+  async updatePrakerin(
     @Param('uuid') uuid: string,
     @UploadedFiles()
     files: {
@@ -158,55 +150,62 @@ export class PrakerinController {
     },
     @Body() updatePrakerinDto: UpdatePrakerinDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
-    const isExist = await this.prakerinService.findPrakerinByUuid(uuid);
+    try {
+      const isExist = await this.prakerinService.findPrakerinByUuid(uuid);
 
-    if (files.thumbnail && files.thumbnail.length > 0) {
-      const thumbnail = this.fileUploadService.updateFile(
-        isExist.data.thumbnail,
-        files.thumbnail[0],
+      const thumbnail =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.updateFile(
+              isExist.thumbnail,
+              files.thumbnail[0],
+            )
+          : { filePath: isExist.thumbnail };
+
+      const file_prakerin =
+        files.file && files.file[0]
+          ? this.fileUploadService.updateFile(
+              isExist.prakerin.file_attachment.file,
+              files.file[0],
+            )
+          : { filePath: isExist.prakerin.file_attachment.file };
+
+      await this.prakerinService.updatePrakerinByUuid(uuid, user['sub'], {
+        ...updatePrakerinDto,
+        thumbnail: thumbnail.filePath,
+        file: file_prakerin.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Prakerin successfully updated!',
+        HttpStatus.OK,
       );
-      updatePrakerinDto.thumbnail = thumbnail.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    if (files.file && files.file.length > 0) {
-      const file_prakerin = this.fileUploadService.updateFile(
-        isExist.data.prakerin.file_attachment.file,
-        files.file[0],
-      );
-      updatePrakerinDto.file = file_prakerin.filePath;
-    }
-
-    const updatedPrakerin = await this.prakerinService.updatePrakerinByUuid(
-      uuid,
-      user['sub'],
-      updatePrakerinDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedPrakerin);
   }
 
   @Delete(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student', 'staff')
-  @ApiOkResponse({
-    type: Prakerin,
-  })
-  async remove(
-    @Param('contentUuid') contentUuid: string,
-    @Res() res: Response,
-  ) {
-    const isExist = await this.prakerinService.findPrakerinByUuid(contentUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
-    this.fileUploadService.deleteFile(
-      isExist.data.prakerin.file_attachment.file,
-    );
+  async removePrakerin(@Param('contentUuid') contentUuid: string) {
+    try {
+      const isExist =
+        await this.prakerinService.findPrakerinByUuid(contentUuid);
+      this.fileUploadService.deleteFile(isExist.thumbnail);
+      this.fileUploadService.deleteFile(isExist.prakerin.file_attachment.file);
 
-    const prakerin =
       await this.prakerinService.removePrakerinByUuid(contentUuid);
 
-    return res.status(HttpStatus.OK).json(prakerin);
+      return SuccessResponse.create(
+        null,
+        'Prakerin successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

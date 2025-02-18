@@ -6,32 +6,24 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
   HttpStatus,
-  UseInterceptors,
-  UploadedFile,
   UseGuards,
   Query,
   Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CategoryService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { Category } from './entities/category.entity';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 
 @ApiTags('Category')
 @ApiBearerAuth('JWT-auth')
@@ -43,83 +35,106 @@ export class CategoryController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiCreatedResponse({ type: Category })
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async create(
-    @UploadedFile() avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() createCategoryDto: CreateCategoryDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(avatar);
-    createCategoryDto.avatar = file.filePath;
-    const result =
-      await this.categoriesService.createCategory(createCategoryDto);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
 
-    return res.status(HttpStatus.CREATED).json(result);
+      await this.categoriesService.createCategory({
+        ...createCategoryDto,
+        avatar: file.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Category successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
   @Get()
-  @ApiOkResponse({ type: Category, isArray: true })
+  @Public()
   @ApiQuery({
     name: 'search',
     required: false,
     type: String,
     description: 'search by name for categories',
   })
-  @HttpCode(HttpStatus.OK)
-  findAll(@Query('search') search: string) {
-    return this.categoriesService.findAllCategory(search);
+  async getAllCategories(@Query('search') search: string) {
+    return SuccessResponse.create(
+      await this.categoriesService.findAllCategory(search),
+      'Categories successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':name')
-  @ApiOkResponse({ type: Category })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('name') name: string) {
-    return this.categoriesService.findCategoryByName(name);
+  @Public()
+  async getCategoryByName(@Param('name') name: string) {
+    return SuccessResponse.create(
+      await this.categoriesService.findCategoryByName(name),
+      'Category successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':name')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(FileInterceptor('avatar'))
-  @ApiOkResponse({ type: Category })
-  @ApiConsumes('multipart/form-data')
-  async update(
+  @FileUpload()
+  async updateCategory(
     @Param('name') name: string,
-    @UploadedFile() avatar: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+    },
     @Body() updateCategoryDto: UpdateCategoryDto,
-    @Res() res: Response,
   ) {
-    const isExist = await this.categoriesService.findCategoryByName(name);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
 
-    if (avatar && avatar.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.avatar,
-        avatar,
+      await this.categoriesService.updateCategoryByName(name, {
+        ...updateCategoryDto,
+        avatar: file.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Category successfully updated!',
+        HttpStatus.OK,
       );
-      updateCategoryDto.avatar = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    const updatedCategory = await this.categoriesService.updateCategoryByName(
-      name,
-      updateCategoryDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedCategory);
   }
 
   @Delete(':name')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({ type: Category })
-  async remove(@Param('name') name: string, @Res() res: Response) {
-    const isExist = await this.categoriesService.findCategoryByName(name);
-    this.fileUploadService.deleteFile(isExist.data.avatar);
+  async removeCategory(@Param('name') name: string) {
+    try {
+      const isExist = await this.categoriesService.findCategoryByName(name);
+      this.fileUploadService.deleteFile(isExist.avatar);
 
-    const category = await this.categoriesService.removeCategoryByName(name);
+      await this.categoriesService.removeCategoryByName(name);
 
-    return res.status(HttpStatus.OK).json(category);
+      return SuccessResponse.create(
+        null,
+        'Category successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

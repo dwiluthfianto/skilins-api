@@ -6,33 +6,24 @@ import {
   Patch,
   Param,
   Delete,
-  HttpCode,
   HttpStatus,
   UseGuards,
   UploadedFiles,
-  UseInterceptors,
   Query,
-  Res,
 } from '@nestjs/common';
 import { EbookService } from './ebooks.service';
 import { CreateEbookDto } from './dto/create-ebook.dto';
 import { UpdateEbookDto } from './dto/update-ebook.dto';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { Ebook } from './entities/ebook.entity';
-import { Roles } from '../roles/roles.decorator';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Roles } from '@decorators/roles.decorator';
+import { RolesGuard } from '@guards/roles.guard';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
-import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiResponse } from '@interfaces/api-response.interface';
 
 @ApiTags('Ebooks')
 @ApiBearerAuth('JWT-auth')
@@ -44,18 +35,9 @@ export class EbookController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiCreatedResponse({
-    type: Ebook,
-  })
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
+  @FileUpload()
   async create(
     @UploadedFiles()
     files: {
@@ -63,52 +45,58 @@ export class EbookController {
       file?: Express.Multer.File[];
     },
     @Body() createEbookDto: CreateEbookDto,
-    @Res() res: Response,
   ) {
-    const thumbnail = this.fileUploadService.handleFileUpload(
-      files.thumbnail[0],
-    );
-    createEbookDto.thumbnail = thumbnail.filePath;
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
+      const file = this.fileUploadService.handleFileUpload(files.file[0]);
 
-    const file = this.fileUploadService.handleFileUpload(files.file[0]);
-    createEbookDto.file = file.filePath;
+      await this.ebookService.createEbook({
+        ...createEbookDto,
+        thumbnail: thumbnail.filePath,
+        file: file.filePath,
+      });
 
-    const result = await this.ebookService.create(createEbookDto);
-    return res.status(HttpStatus.CREATED).json(result);
+      return SuccessResponse.create(
+        null,
+        'Ebook successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: Ebook,
-    isArray: true,
-  })
-  @HttpCode(HttpStatus.OK)
-  findAllByUser(@Query() query: FindContentQueryDto) {
-    return this.ebookService.findAllEbookByUser(query);
+  @Public()
+  async getEbooks(
+    @Query() query: FindContentQueryDto,
+  ): Promise<ApiResponse<any>> {
+    const { data, pagination } =
+      await this.ebookService.findAllEbookByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Ebooks successfully fetched!',
+    );
   }
 
   @Get(':slug')
-  @ApiOkResponse({
-    type: Ebook,
-  })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('slug') slug: string) {
-    return this.ebookService.findEbookBySlug(slug);
+  @Public()
+  async getEbookBySlug(@Param('slug') slug: string) {
+    const data = await this.ebookService.findEbookBySlug(slug);
+    return SuccessResponse.create(
+      data,
+      'Ebook successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({
-    type: Ebook,
-  })
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'file', maxCount: 1 },
-    ]),
-  )
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async update(
     @UploadedFiles()
     files: {
@@ -117,51 +105,62 @@ export class EbookController {
     },
     @Param('contentUuid') contentUuid: string,
     @Body() updateEbookDto: UpdateEbookDto,
-    @Res() res: Response,
-  ) {
-    const currentEbook = await this.ebookService.findEbookByUuid(contentUuid);
+  ): Promise<ApiResponse<any>> {
+    try {
+      const currentEbook = await this.ebookService.findEbookByUuid(contentUuid);
 
-    if (files.thumbnail && files.thumbnail.length > 0) {
-      const thumbnail = this.fileUploadService.updateFile(
-        currentEbook.data.thumbnail,
-        files.thumbnail[0],
+      const thumbnail =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.updateFile(
+              currentEbook.thumbnail,
+              files.thumbnail[0],
+            )
+          : { filePath: currentEbook.thumbnail };
+
+      const file =
+        files.file && files.file[0]
+          ? this.fileUploadService.updateFile(
+              currentEbook.ebook.file_attachment.file,
+              files.file[0],
+            )
+          : { filePath: currentEbook.ebook.file_attachment.file };
+
+      await this.ebookService.updateEbookByUuid(contentUuid, {
+        ...updateEbookDto,
+        thumbnail: thumbnail.filePath,
+        file: file.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Ebook successfully updated!',
+        HttpStatus.OK,
       );
-      updateEbookDto.thumbnail = thumbnail.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    if (files.file && files.file.length > 0) {
-      const file = this.fileUploadService.updateFile(
-        currentEbook.data.ebook.file_attachment.file,
-        files.file[0],
-      );
-      updateEbookDto.file = file.filePath;
-    }
-
-    const updatedEbook = await this.ebookService.updateEbookByUuid(
-      contentUuid,
-      updateEbookDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedEbook);
   }
 
   @Delete(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({
-    type: Ebook,
-  })
-  @HttpCode(HttpStatus.OK)
   async remove(
     @Param('contentUuid') contentUuid: string,
-    @Res() res: Response,
-  ) {
-    const isExist = await this.ebookService.findEbookByUuid(contentUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
-    this.fileUploadService.deleteFile(isExist.data.ebook.file_attachment.file);
+  ): Promise<ApiResponse<any>> {
+    try {
+      const isExist = await this.ebookService.findEbookByUuid(contentUuid);
+      this.fileUploadService.deleteFile(isExist.thumbnail);
+      this.fileUploadService.deleteFile(isExist.ebook.file_attachment.file);
 
-    const audio = await this.ebookService.removeEbookByUuid(contentUuid);
+      await this.ebookService.removeEbookByUuid(contentUuid);
 
-    return res.status(HttpStatus.OK).json(audio);
+      return SuccessResponse.create(
+        null,
+        'Ebook successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

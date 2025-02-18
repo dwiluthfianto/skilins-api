@@ -11,57 +11,25 @@ import { AuthRegisterLoginDto } from './dto/auth-register-login.dto';
 import * as bcrypt from 'bcrypt';
 import { UserService } from '../users/users.service';
 import { ConfigService } from '@nestjs/config';
-import { MailerService } from '@nestjs-modules/mailer';
-import { AuthForgotPasswordDto } from './dto/auth-forgot-password.dto';
 import { AuthResetPasswordDto } from './dto/auth-reset-password.dto';
 import { AuthChangePasswordDto } from './dto/auth-change-password.dto';
 import { RoleType, SexType } from '@prisma/client';
 import { AuthRegisterStudentDto } from './dto/auth-register-student.dto';
-import { addMinutes } from 'date-fns';
+import ms from 'ms';
+import { EmailService } from '../mailer/mailer.service';
+import { AuthForgotPasswordDto } from './dto/auth-forgot-password.dto';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly prismaService: PrismaService,
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly configService: ConfigService,
-    private readonly mailerService: MailerService,
+    private readonly emailService: EmailService,
   ) {}
 
-  async sendVerificationEmail(uuid: string) {
-    const user = await this.prismaService.user.findUnique({
-      where: { uuid },
-      include: { role: true },
-    });
-
-    const token = this.jwtService.sign(
-      { email: user.email, sub: user.uuid, role: user.role.name },
-      {
-        secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
-        expiresIn: this.configService.get<string>(
-          'AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN',
-        ),
-      },
-    );
-    const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
-
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Email Verification',
-      template: './email-verification',
-      context: {
-        name: user.email,
-        url: verificationUrl,
-      },
-    });
-
-    this.logger.log(`Verification email sent to ${user.email}`);
-  }
-
-  // Verifikasi email berdasarkan token
   async verifyEmail(token: string) {
     try {
       const payload = await this.jwtService.verifyAsync(token, {
@@ -75,20 +43,12 @@ export class AuthService {
         where: { uuid: user.uuid },
         data: { email_verified: true },
       });
-
-      this.logger.log(`User ${user.email} has been verified`);
-      return {
-        status: 'success',
-        message: 'Verification successful!',
-      };
     } catch (e) {
-      this.logger.log(e);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
 
-  // Mengirim email untuk reset password
-  async sendPasswordResetEmail(authForgotPasswordDto: AuthForgotPasswordDto) {
+  async forgotPassword(authForgotPasswordDto: AuthForgotPasswordDto) {
     const { email } = authForgotPasswordDto;
     const user = await this.prismaService.user.findUniqueOrThrow({
       where: { email },
@@ -105,13 +65,17 @@ export class AuthService {
       },
     );
 
-    const expiresIn = this.configService.get<string>(
+    const expiresIn = this.configService.get<any>(
       'AUTH_FORGOT_TOKEN_EXPIRES_IN',
     );
-    const minutes = parseInt(expiresIn, 10);
-    const reset_token_expires = addMinutes(new Date(), minutes);
 
-    const hashedToken = await bcrypt.hash(token, 10);
+    const reset_token_expires = ms(expiresIn);
+
+    const hashedToken = crypto
+      .createHmac('sha256', process.env.AUTH_FORGOT_SECRET)
+      .update(token)
+      .digest('hex');
+
     await this.prismaService.user.update({
       where: { email: user.email },
       data: {
@@ -122,18 +86,9 @@ export class AuthService {
 
     const resetUrl = `${process.env.FRONTEND_DOMAIN}/auth/reset-password?token=${token}`;
 
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Password Reset',
-      template: './password-reset',
-      context: {
-        name: user.email,
-        url: resetUrl,
-      },
-    });
+    await this.emailService.sendPasswordResetEmail(user.email, resetUrl);
   }
 
-  // Reset password berdasarkan token
   async resetPassword(authResetPasswordDto: AuthResetPasswordDto) {
     const { password: newPassword, token } = authResetPasswordDto;
     try {
@@ -148,11 +103,12 @@ export class AuthService {
         throw new UnauthorizedException('Token has expired');
       }
 
-      const isTokenValid = await bcrypt.compare(
-        token,
-        user.reset_password_token,
-      );
-      if (!isTokenValid) {
+      const hashedToken = crypto
+        .createHmac('sha256', process.env.AUTH_FORGOT_SECRET)
+        .update(token)
+        .digest('hex');
+
+      if (hashedToken !== user.reset_password_token) {
         throw new UnauthorizedException('Invalid token');
       }
 
@@ -166,7 +122,6 @@ export class AuthService {
         },
       });
     } catch (e) {
-      this.logger.log(e);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
@@ -196,25 +151,36 @@ export class AuthService {
         reset_token_expires: null,
       },
     });
-
-    return {
-      status: 'success',
-      message: 'Password changed successfully',
-    };
   }
 
-  // Mengganti email pengguna
   async changeEmail(uuid: string, newEmail: string) {
-    await this.prismaService.user.findUniqueOrThrow({
-      where: { email: newEmail },
+    const user = await this.prismaService.user.findUnique({
+      where: { uuid },
+      include: { role: true },
     });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
     await this.prismaService.user.update({
       where: { uuid },
       data: { email: newEmail, email_verified: false },
     });
 
-    await this.sendVerificationEmail(uuid);
+    const token = this.jwtService.sign(
+      { email: user.email, sub: user.uuid, role: user.role.name },
+      {
+        secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
+        expiresIn: this.configService.get<string>(
+          'AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN',
+        ),
+      },
+    );
+
+    const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
+
+    await this.emailService.sendVerificationEmail(newEmail, verificationUrl);
   }
 
   async login(authEmailLoginDto: AuthEmailLoginDto): Promise<any> {
@@ -262,14 +228,11 @@ export class AuthService {
 
     await this.userService.updateRefreshToken(user.uuid, refreshToken);
     return {
-      status: 'success',
-      message: 'Login successful',
-      data: {
-        uuid: user.uuid,
-        email: user.email,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      },
+      uuid: user.uuid,
+      email: user.email,
+      role: user.role.name,
+      access_token: accessToken,
+      refresh_token: refreshToken,
     };
   }
 
@@ -288,14 +251,22 @@ export class AuthService {
         email_verified: false,
         role: { connect: { uuid: role.uuid } },
       },
+      include: { role: true },
     });
-    await this.sendVerificationEmail(user.uuid);
 
-    return {
-      status: 'success',
-      message:
-        'Register successful! Please check your email to verify your account.',
-    };
+    const token = this.jwtService.sign(
+      { email: user.email, sub: user.uuid, role: user.role.name },
+      {
+        secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
+        expiresIn: this.configService.get<string>(
+          'AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN',
+        ),
+      },
+    );
+
+    const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
+
+    await this.emailService.sendVerificationEmail(user.email, verificationUrl);
   }
 
   async registerStudent(authRegisterStudentDto: AuthRegisterStudentDto) {
@@ -324,67 +295,68 @@ export class AuthService {
             name: authRegisterStudentDto.name,
             birthdate: authRegisterStudentDto.birthdate,
             birthplace: authRegisterStudentDto.birthplace,
-            sex: authRegisterStudentDto.sex.toLowerCase() as SexType,
+            sex: authRegisterStudentDto.sex as SexType,
             major: { connect: { uuid: major.uuid } },
           },
         },
       },
-    });
-
-    await this.sendVerificationEmail(user.uuid);
-
-    return {
-      status: 'success',
-      message:
-        'Register successfully! Please check your email to verify your account.',
-    };
-  }
-
-  async validateUser(uuid: string) {
-    const user = await this.prismaService.user.findUniqueOrThrow({
-      where: { uuid },
       include: { role: true },
     });
 
-    return user;
+    const token = this.jwtService.sign(
+      { email: user.email, sub: user.uuid, role: user.role.name },
+      {
+        secret: this.configService.get<string>('AUTH_CONFIRM_EMAIL_SECRET'),
+        expiresIn: this.configService.get<string>(
+          'AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN',
+        ),
+      },
+    );
+
+    const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
+
+    await this.emailService.sendVerificationEmail(user.email, verificationUrl);
   }
 
-  async refreshTokens(refreshToken: string) {
-    const decoded = this.jwtService.decode(refreshToken) as any;
+  async refreshTokens(refreshToken: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
+    try {
+      const token = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.get<string>('AUTH_REFRESH_SECRET'),
+      });
+      const user = await this.userService.findOne(token.sub);
 
-    if (!decoded || !decoded.sub) {
-      throw new UnauthorizedException('Invalid refresh token');
+      if (
+        !user ||
+        !(await this.validateRefreshToken(user.uuid, refreshToken))
+      ) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const payload = {
+        email: user.email,
+        sub: user.uuid,
+        role: user.role,
+      };
+      const accessToken = this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('AUTH_JWT_SECRET'),
+        expiresIn: this.configService.get<string>('AUTH_JWT_TOKEN_EXPIRES_IN'),
+      });
+      const newRefreshToken = this.jwtService.sign(payload, {
+        secret: this.configService.get<string>('AUTH_REFRESH_SECRET'),
+        expiresIn: this.configService.get<string>(
+          'AUTH_REFRESH_TOKEN_EXPIRES_IN',
+        ),
+      });
+
+      await this.userService.updateRefreshToken(user.uuid, newRefreshToken);
+
+      return { access_token: accessToken, refresh_token: newRefreshToken };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
-
-    const user = await this.userService.findOne(decoded.sub);
-
-    if (
-      !user ||
-      !(await this.validateRefreshToken(user.data.uuid, refreshToken))
-    ) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    const payload = {
-      email: user.data.email,
-      sub: user.data.uuid,
-      role: user.data.role,
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('AUTH_JWT_SECRET'),
-      expiresIn: this.configService.get<string>('AUTH_JWT_TOKEN_EXPIRES_IN'),
-    });
-    const newRefreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('AUTH_REFRESH_SECRET'),
-      expiresIn: this.configService.get<string>(
-        'AUTH_REFRESH_TOKEN_EXPIRES_IN',
-      ),
-    });
-
-    await this.userService.updateRefreshToken(user.data.uuid, newRefreshToken);
-
-    return { access_token: accessToken, refresh_token: newRefreshToken };
   }
 
   async validateRefreshToken(
@@ -392,10 +364,13 @@ export class AuthService {
     refreshToken: string,
   ): Promise<boolean> {
     const user = await this.prismaService.user.findUnique({ where: { uuid } });
-
     if (!user || !user.refresh_token) return false;
 
-    return bcrypt.compare(refreshToken, user.refresh_token);
+    const hashedToken = crypto
+      .createHmac('sha256', process.env.AUTH_REFRESH_SECRET)
+      .update(refreshToken)
+      .digest('hex');
+    return hashedToken === user.refresh_token;
   }
 
   async logout(uuid: string): Promise<void> {

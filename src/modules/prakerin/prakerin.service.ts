@@ -7,20 +7,15 @@ import {
 import { CreatePrakerinDto } from './dto/create-prakerin.dto';
 import { UpdatePrakerinDto } from './dto/update-prakerin.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
-import {
-  contentFilter,
-  contentFilterByUser,
-} from 'src/common/utils/filter/content-filter';
+import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
 
 @Injectable()
 export class PrakerinService {
   constructor(
     private prismaService: PrismaService,
-    private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
   async createPrakerin(
@@ -29,7 +24,7 @@ export class PrakerinService {
   ) {
     const { title, thumbnail, description, pages, file } = createPrakerinDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
       const userData = await prisma.user.findUniqueOrThrow({
         where: {
@@ -75,15 +70,7 @@ export class PrakerinService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Prakerin successfully added!',
-        data: newContent,
-      };
     });
-
-    return res;
   }
 
   async findAllPrakerinByUser(findPrakerinQueryDto: FindPrakerinQueryDto) {
@@ -133,7 +120,6 @@ export class PrakerinService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -195,7 +181,6 @@ export class PrakerinService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -235,12 +220,7 @@ export class PrakerinService {
       },
     });
 
-    const data = prakerin;
-
-    return {
-      status: 'success',
-      data,
-    };
+    return prakerin;
   }
 
   async findPrakerinByUuid(contentUuid: string) {
@@ -261,10 +241,7 @@ export class PrakerinService {
       );
     }
 
-    return {
-      status: 'success',
-      data: content,
-    };
+    return content;
   }
 
   async findPrakerinBySlug(slug: string) {
@@ -306,21 +283,12 @@ export class PrakerinService {
     });
 
     return {
-      status: 'success',
-      data: {
-        ...content,
-        tag: content.tag.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        comment: content.comment.map((comment) => ({
-          ...comment,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile,
-        })),
-        avg_rating: avg_rating._avg.rating_value,
-      },
+      ...content,
+      tag: content.tag.map((tag) => ({
+        id: tag.uuid,
+        text: tag.name,
+      })),
+      avg_rating: avg_rating._avg.rating_value,
     };
   }
 
@@ -331,7 +299,7 @@ export class PrakerinService {
   ) {
     const { title, thumbnail, description, pages, file } = updatePrakerinDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const content = await prisma.content.findUnique({
         where: {
           uuid: contentUuid,
@@ -354,7 +322,14 @@ export class PrakerinService {
           'Content not found, please make sure you input correct content',
         );
       }
-      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
+      const creator = await prisma.user.findUniqueOrThrow({
+        where: { uuid: creatorUuid },
+        select: {
+          student: {
+            select: { id: true },
+          },
+        },
+      });
 
       if (creator.student.id !== content.prakerin.creator_id) {
         throw new UnauthorizedException(
@@ -393,14 +368,7 @@ export class PrakerinService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'prakerin updated successfully!',
-      };
     });
-
-    return res;
   }
 
   async removePrakerinByUuid(contentUuid: string) {
@@ -417,10 +385,6 @@ export class PrakerinService {
     await this.prismaService.content.delete({
       where: { uuid: contentUuid },
     });
-    return {
-      status: 'success',
-      message: 'Prakerin successfully deleted!',
-    };
   }
 
   async summaryPrakerinStaff() {
@@ -438,8 +402,6 @@ export class PrakerinService {
       { pending: 0, approved: 0, rejected: 0 },
     );
 
-    return {
-      counter,
-    };
+    return counter;
   }
 }

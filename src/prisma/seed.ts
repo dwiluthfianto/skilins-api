@@ -28,11 +28,11 @@ async function seedRoles() {
 }
 
 // Seed Users
-const adminPass = bcrypt.hash('sIc1l1ns', 10);
-const staffPass = bcrypt.hash('@staff.skilins106', 10);
-const studentPass = bcrypt.hash('@student.skilins106', 10);
 
 async function seedUsers() {
+  const adminPass = await bcrypt.hash('sIc1l1ns', 10);
+  const staffPass = await bcrypt.hash('@staff.skilins106', 10);
+  const studentPass = await bcrypt.hash('@student.skilins106', 10);
   const users = [
     {
       uuid: '33af070e-9cde-4024-8e90-fbfef6b39640',

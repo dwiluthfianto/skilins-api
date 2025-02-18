@@ -9,20 +9,15 @@ import {
 import { CreateAudioPodcastDto } from './dto/create-audio-podcast.dto';
 import { UpdateAudioPodcastDto } from './dto/update-audio-podcast.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import parseArrayInput from 'src/common/utils/parse-array';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
+import parseArrayInput from '@utils/parse-array.util';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
-import {
-  contentFilter,
-  contentFilterByUser,
-} from 'src/common/utils/filter/content-filter';
+import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
 
 @Injectable()
 export class AudioPodcastService {
   constructor(
     private prismaService: PrismaService,
-    private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
 
@@ -38,7 +33,7 @@ export class AudioPodcastService {
       genres,
     } = data;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
 
@@ -109,14 +104,8 @@ export class AudioPodcastService {
         },
       });
 
-      return {
-        status: 'success',
-        message: 'Audio successfully uploaded!',
-        data: newContent,
-      };
+      return newContent;
     });
-
-    return res;
   }
 
   async findAllAudioByUser(findContentQueryDto: FindContentQueryDto) {
@@ -167,7 +156,6 @@ export class AudioPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -245,7 +233,6 @@ export class AudioPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -331,7 +318,6 @@ export class AudioPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -360,10 +346,7 @@ export class AudioPodcastService {
       );
     }
 
-    return {
-      status: 'success',
-      data: audio,
-    };
+    return audio;
   }
 
   async findAudioBySlug(slug: string) {
@@ -417,25 +400,16 @@ export class AudioPodcastService {
     });
 
     return {
-      status: 'success',
-      data: {
-        ...audio,
-        tag: audio.tag.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        genre: audio.genre?.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comment: audio.comment.map((comment) => ({
-          ...comment,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile,
-        })),
-        avg_rating: avg_rating._avg.rating_value,
-      },
+      ...audio,
+      tag: audio.tag.map((tag) => ({
+        id: tag.uuid,
+        text: tag.name,
+      })),
+      genre: audio.genre?.map((genre) => ({
+        id: genre.uuid,
+        text: genre.name,
+      })),
+      avg_rating: avg_rating._avg.rating_value,
     };
   }
 
@@ -455,7 +429,7 @@ export class AudioPodcastService {
       file,
     } = updateAudioPodcastDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const content = await prisma.content.findUnique({
         where: {
           uuid: contentUuid,
@@ -478,9 +452,20 @@ export class AudioPodcastService {
           'Audio not found, please make sure you input correct audio',
         );
       }
-      const category =
-        await this.uuidHelper.validateUuidCategory(category_name);
-      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
+      const category = await this.prismaService.category.findUnique({
+        where: { uuid: category_name },
+      });
+
+      if (!category) {
+        throw new NotFoundException('Category not found');
+      }
+
+      const creator = await this.prismaService.user.findUnique({
+        where: { uuid: creatorUuid },
+        include: {
+          student: true,
+        },
+      });
 
       if (creator.student.id !== content.audio_podcast.creator_id) {
         throw new UnauthorizedException(
@@ -544,31 +529,13 @@ export class AudioPodcastService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Audio successfully updated!',
-      };
     });
-
-    return res;
   }
 
   async removeAudioByUuid(contentUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.uuidHelper.validateUuidContent(contentUuid);
-
-      await prisma.content.delete({
-        where: { uuid: contentUuid },
-      });
-
-      return {
-        status: 'success',
-        message: 'Audio successfully deleted!',
-      };
+    await this.prismaService.content.delete({
+      where: { uuid: contentUuid },
     });
-
-    return res;
   }
 
   async summaryAudioStudent(userUuid: string) {
@@ -608,9 +575,7 @@ export class AudioPodcastService {
       { pending: 0, approved: 0, rejected: 0 },
     );
 
-    return {
-      counter,
-    };
+    return counter;
   }
 
   async summaryAudioStaff() {
@@ -626,8 +591,6 @@ export class AudioPodcastService {
       },
       { pending: 0, approved: 0, rejected: 0 },
     );
-    return {
-      counter,
-    };
+    return counter;
   }
 }

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from './prisma/prisma.module';
-import { PrismaService } from './prisma/prisma.service';
 import { EbookModule } from './modules/ebooks/ebooks.module';
 import { CategoryModule } from './modules/categories/categories.module';
 import { AudioPodcastModule } from './modules/audio-podcasts/audio-podcasts.module';
@@ -16,7 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 // import { ThrottlerModule } from '@nestjs/throttler';
-import { MailerConfigModule } from './modules/mailer/mailer.module';
+import { MailerModule } from './modules/mailer/mailer.module';
 import { HealthModule } from './modules/health/health.module';
 import { GenreModule } from './modules/genres/genres.module';
 import { RatingModule } from './modules/ratings/ratings.module';
@@ -31,14 +30,14 @@ import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './common/logger/wingston.config';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { GlobalExceptionFilter } from './common/filters/global-exception';
 import { APP_FILTER } from '@nestjs/core';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads'), // Folder "uploads" sebagai root file statis
-      serveRoot: '/public', // URL akses publik, contoh: http://localhost:3000/uploads/
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/public',
     }),
     WinstonModule.forRoot(winstonConfig),
     PrismaModule,
@@ -62,7 +61,7 @@ import { APP_FILTER } from '@nestjs/core';
     //   },
     // ]),
     ScheduleModule.forRoot(),
-    MailerConfigModule,
+    MailerModule,
     HealthModule,
     GenreModule,
     RatingModule,
@@ -75,7 +74,6 @@ import { APP_FILTER } from '@nestjs/core';
   ],
   controllers: [],
   providers: [
-    PrismaService,
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,

@@ -3,11 +3,10 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-// import * as csurf from 'csurf';
 import * as fs from 'fs';
-import { Logger } from 'winston';
 import path from 'path';
+import { ApiResponseInterceptor } from '@interceptors/api-response.interceptor';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +38,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
+  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalFilters(new ApiExceptionFilter());
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -51,8 +53,7 @@ async function bootstrap() {
     origin: process.env.FRONTEND_DOMAIN,
     credentials: true,
   });
-  app.use(cookieParser());
-  // app.use(csurf({ cookie: true }));
+  app.use(cookieParser(process.env.COOKIE_SECRET));
   await app.listen(process.env.APP_PORT);
 }
 bootstrap();

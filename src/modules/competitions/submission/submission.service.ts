@@ -3,18 +3,17 @@ import { CreateSubmissionDto } from '../dto/create-submission.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ContentStatus, ContentType } from '@prisma/client';
 import { ContentService } from 'src/modules/contents/contents.service';
-import { MailerService } from '@nestjs-modules/mailer';
 import { AudioPodcastService } from 'src/modules/audio-podcasts/audio-podcasts.service';
 import { VideoPodcastService } from 'src/modules/video-podcasts/video-podcasts.service';
 import { PrakerinService } from 'src/modules/prakerin/prakerin.service';
+import { EmailService } from '@modules/mailer/mailer.service';
 
 @Injectable()
 export class SubmissionService {
-  private readonly logger = new Logger(SubmissionService.name);
   constructor(
     private readonly prismaService: PrismaService,
     private readonly contentService: ContentService,
-    private readonly mailerService: MailerService,
+    private readonly emailService: EmailService,
     private readonly audioPodcastService: AudioPodcastService,
     private readonly videoPodcastService: VideoPodcastService,
     private readonly prakerinService: PrakerinService,
@@ -69,19 +68,13 @@ export class SubmissionService {
       },
     });
 
-    const submit = await this.prismaService.submission.create({
+    await this.prismaService.submission.create({
       data: {
         student: { connect: { uuid: userData.student.uuid } },
         content: { connect: { uuid: content.data.uuid } },
         competition: { connect: { slug: competition_slug } },
       },
     });
-
-    return {
-      status: 'success',
-      message: 'Successfully join the competition.',
-      data: submit,
-    };
   }
 
   async approveSubmission(submissionUuid: string) {
@@ -94,25 +87,18 @@ export class SubmissionService {
       },
     });
 
-    await this.mailerService.sendMail({
-      to: submission.student.user.email,
-      subject: 'Submission Approved',
-      template: './submission-approved',
-      context: {
-        name: submission.student.name,
-        competition_name: submission.competition.title,
-        title_submission: submission.content.title,
-        submission_id: submission.id,
-        submission_date: submission.created_at,
-        judging_dates: `${submission.competition.start_date} - ${submission.competition.end_date}`,
-        announcement_date: submission.competition.end_date,
-      },
-    });
-
-    this.logger.log(
-      `Approved Submission email sent to ${submission.student.name}`,
+    await this.emailService.sendSubmissionApprovedEmail(
+      submission.student.user.email,
+      submission.student.name,
+      submission.competition.title,
+      submission.content.title,
+      submission.id.toString(),
+      submission.created_at.toISOString(),
+      `${submission.competition.start_date} - ${submission.competition.end_date}`,
+      submission.competition.end_date.toISOString(),
     );
-    return this.contentService.updateContentStatus(
+
+    await this.contentService.updateContentStatus(
       submission.content.uuid,
       ContentStatus.approved,
     );
@@ -128,21 +114,16 @@ export class SubmissionService {
       },
     });
 
-    await this.mailerService.sendMail({
-      to: submission.student.user.email,
-      subject: `Submission Rejected`,
-      template: './submission-rejected',
-      context: {
-        name: submission.student.name,
-        competition_name: submission.competition.title,
-        title_submission: submission.content.title,
-        submission_id: submission.id,
-        submission_date: submission.created_at,
-      },
-    });
+    await this.emailService.sendSubmissionRejectedEmail(
+      submission.student.user.email,
+      submission.student.name,
+      submission.competition.title,
+      submission.content.title,
+      submission.id.toString(),
+      submission.created_at.toISOString(),
+    );
 
-    this.logger.log(`Approved Submission sent to ${submission.student.name}`);
-    return this.contentService.updateContentStatus(
+    await this.contentService.updateContentStatus(
       submission.content.uuid,
       ContentStatus.rejected,
     );

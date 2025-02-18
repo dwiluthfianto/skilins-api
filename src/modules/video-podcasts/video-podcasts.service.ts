@@ -7,23 +7,20 @@ import {
 import { CreateVideoPodcastDto } from './dto/create-video-podcast.dto';
 import { UpdateVideoPodcastDto } from './dto/update-video-podcast.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import parseArrayInput from 'src/common/utils/parse-array';
-import { ContentStatus, Prisma } from '@prisma/client';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
+import parseArrayInput from '@utils/parse-array.util';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
-import { subMonths } from 'date-fns';
-import {
-  contentFilter,
-  contentFilterByUser,
-} from 'src/common/utils/filter/content-filter';
+import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
+import { UserService } from '@modules/users/users.service';
+import { CategoryService } from '@modules/categories/categories.service';
 
 @Injectable()
 export class VideoPodcastService {
   constructor(
     private prismaService: PrismaService,
-    private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
+    private readonly userService: UserService,
+    private readonly categoryService: CategoryService,
   ) {}
   async create(
     creatorUuid: string,
@@ -32,7 +29,7 @@ export class VideoPodcastService {
     const { title, thumbnail, description, tags, category_name, genres, link } =
       createVideoPodcastDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
 
       const parsedTags = parseArrayInput(tags);
@@ -89,14 +86,8 @@ export class VideoPodcastService {
           },
         },
       });
-      return {
-        status: 'success',
-        message: 'Video successfully uploaded!',
-        data: newContent,
-      };
+      return newContent;
     });
-
-    return res;
   }
 
   async findAllVideoByUser(findContentQueryDto: FindContentQueryDto) {
@@ -141,7 +132,6 @@ export class VideoPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -210,7 +200,6 @@ export class VideoPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -289,7 +278,6 @@ export class VideoPodcastService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -311,10 +299,7 @@ export class VideoPodcastService {
       );
     }
 
-    return {
-      status: 'success',
-      data: video,
-    };
+    return video;
   }
 
   async findVideoBySlug(slug: string) {
@@ -363,25 +348,16 @@ export class VideoPodcastService {
     });
 
     return {
-      status: 'success',
-      data: {
-        ...video,
-        tag: video.tag.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        genre: video.genre.map((genre) => ({
-          id: genre.uuid,
-          text: genre.name,
-        })),
-        comment: video.comment.map((comment) => ({
-          ...comment,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile,
-        })),
-        avg_rating: avg_rating._avg.rating_value,
-      },
+      ...video,
+      tag: video.tag.map((tag) => ({
+        id: tag.uuid,
+        text: tag.name,
+      })),
+      genre: video.genre.map((genre) => ({
+        id: genre.uuid,
+        text: genre.name,
+      })),
+      avg_rating: avg_rating._avg.rating_value,
     };
   }
 
@@ -393,7 +369,7 @@ export class VideoPodcastService {
     const { title, thumbnail, description, tags, category_name, genres, link } =
       updateVideoPodcastDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const content = await prisma.content.findUnique({
         where: {
           uuid,
@@ -415,7 +391,7 @@ export class VideoPodcastService {
           'Content not found, please make sure you input correct content',
         );
       }
-      const creator = await this.uuidHelper.validateUuidCreator(creatorUuid);
+      const creator = await this.userService.findOne(creatorUuid);
 
       if (creator.student.id !== content.video_podcast.creator_id) {
         throw new UnauthorizedException(
@@ -424,7 +400,7 @@ export class VideoPodcastService {
       }
 
       const category =
-        await this.uuidHelper.validateUuidCategory(category_name);
+        await this.categoryService.findCategoryByName(category_name);
 
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
@@ -472,29 +448,15 @@ export class VideoPodcastService {
           },
         },
       });
-      return {
-        status: 'success',
-        message: 'video successfully updated!',
-      };
     });
-
-    return res;
   }
 
   async removeVideoByUuid(contentUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.uuidHelper.validateUuidContent(contentUuid);
+    await this.findVideoByUuid(contentUuid);
 
-      await prisma.content.delete({
-        where: { uuid: contentUuid },
-      });
-      return {
-        status: 'success',
-        message: 'Video successfully deleted!',
-      };
+    await this.prismaService.content.delete({
+      where: { uuid: contentUuid },
     });
-
-    return res;
   }
 
   async summaryVideoStudent(userUuid: string) {
@@ -534,9 +496,7 @@ export class VideoPodcastService {
       { pending: 0, approved: 0, rejected: 0 },
     );
 
-    return {
-      counter,
-    };
+    return counter;
   }
 
   async summaryVideoStaff() {
@@ -554,8 +514,6 @@ export class VideoPodcastService {
       { pending: 0, approved: 0, rejected: 0 },
     );
 
-    return {
-      counter,
-    };
+    return counter;
   }
 }

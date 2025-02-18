@@ -10,29 +10,22 @@ import {
   HttpStatus,
   UseGuards,
   Query,
-  UseInterceptors,
-  UploadedFile,
   Req,
-  Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { BlogService } from './blogs.service';
 import { CreateBlogDto } from './dto/create-blog.dto';
 import { UpdateBlogDto } from './dto/update-blog.dto';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { Blog } from './entities/blog.entity';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Request, Response } from 'express';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Request } from 'express';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { ApiException } from '@exceptions/api-exception';
+import { SuccessResponse } from '@utils/api-response.util';
+import { Public } from '@decorators/public.decorator';
 
 @ApiTags('Blogs')
 @ApiBearerAuth('JWT-auth')
@@ -44,101 +37,115 @@ export class BlogController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiCreatedResponse({
-    type: Blog,
-  })
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @ApiConsumes('multipart/form-data')
-  async create(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+  @FileUpload()
+  async createBlog(
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Req() req: Request,
-    @Res() res: Response,
     @Body() createBlogDto: CreateBlogDto,
   ) {
     const user = req.user;
-    const file = this.fileUploadService.handleFileUpload(thumbnail);
-    createBlogDto.thumbnail = file.filePath;
-    const result = await this.blogService.createBlog(
-      user['sub'],
-      createBlogDto,
-    );
-    return res.status(HttpStatus.CREATED).json(result);
+
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
+      await this.blogService.createBlog(user['sub'], {
+        ...createBlogDto,
+        thumbnail: thumbnail.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Blog successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: Blog,
-    isArray: true,
-  })
+  @Public()
   @HttpCode(HttpStatus.OK)
-  findAllBlogByUser(@Query() query: FindBlogQueryDto) {
-    return this.blogService.findAllBlogByUser(query);
+  async getAllBlog(@Query() query: FindBlogQueryDto) {
+    const { data, pagination } =
+      await this.blogService.findAllBlogByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Blogs successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
-  @ApiOkResponse({
-    type: Blog,
-  })
-  @HttpCode(HttpStatus.OK)
-  findBlog(@Param('slug') slug: string) {
-    return this.blogService.findBlogBySlug(slug);
+  @Public()
+  async getBlogBySlug(@Param('slug') slug: string) {
+    return SuccessResponse.create(
+      await this.blogService.findBlogBySlug(slug),
+      'Blog successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({
-    type: Blog,
-  })
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @ApiConsumes('multipart/form-data')
-  async update(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+  @FileUpload()
+  async updateBlog(
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Req() req: Request,
     @Param('contentUuid') contentUuid: string,
     @Body() updateBlogDto: UpdateBlogDto,
-    @Res() res: Response,
   ) {
     const user = req.user;
 
-    const isExist = await this.blogService.findBlogByUuid(contentUuid);
-    if (thumbnail && thumbnail.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.thumbnail,
-        thumbnail,
+    try {
+      const thumbnail =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.handleFileUpload(files.thumbnail[0])
+          : { filePath: updateBlogDto.thumbnail };
+
+      await this.blogService.updateBlogByUuid(user['sub'], contentUuid, {
+        ...updateBlogDto,
+        thumbnail: thumbnail.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Blog successfully updated!',
+        HttpStatus.OK,
       );
-      updateBlogDto.thumbnail = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    const blog = await this.blogService.updateBlogByUuid(
-      user['sub'],
-      contentUuid,
-      updateBlogDto,
-    );
-
-    return res.status(HttpStatus.OK).json(blog);
   }
 
   @Delete(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({
-    type: Blog,
-  })
-  @HttpCode(HttpStatus.OK)
-  async remove(
-    @Param('contentUuid') contentUuid: string,
-    @Res() res: Response,
-  ) {
-    const isExist = await this.blogService.findBlogByUuid(contentUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+  async removeBlog(@Param('contentUuid') contentUuid: string) {
+    try {
+      const isExist = await this.blogService.findBlogByUuid(contentUuid);
+      this.fileUploadService.deleteFile(isExist.thumbnail);
 
-    const blog = await this.blogService.removeBlogByUuid(contentUuid);
+      await this.blogService.removeBlogByUuid(contentUuid);
 
-    return res.status(HttpStatus.OK).json(blog);
+      return SuccessResponse.create(
+        null,
+        'Blog successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

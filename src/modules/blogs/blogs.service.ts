@@ -2,21 +2,16 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBlogDto } from './dto/create-blog.dto';
 import { UpdateBlogDto } from './dto/update-blog.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
 import { ContentStatus } from '@prisma/client';
-import parseArrayInput from 'src/common/utils/parse-array';
+import parseArrayInput from '@utils/parse-array.util';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
-import {
-  contentFilter,
-  contentFilterByUser,
-} from 'src/common/utils/filter/content-filter';
+import { contentFilterByUser } from '@utils/content-filter.util';
 
 @Injectable()
 export class BlogService {
   constructor(
     private prismaService: PrismaService,
-    private readonly uuidHelper: UuidHelper,
     private readonly slugHelper: SlugHelper,
   ) {}
 
@@ -24,7 +19,7 @@ export class BlogService {
     const { title, thumbnail, description, tags, category_name } =
       createBlogDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const parsedTags = parseArrayInput(tags);
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
@@ -69,14 +64,7 @@ export class BlogService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Blog successfully uploaded!',
-      };
     });
-
-    return res;
   }
 
   async findAllBlogByUser(findBlogQueryDto: FindBlogQueryDto) {
@@ -125,7 +113,6 @@ export class BlogService {
     );
 
     return {
-      status: 'success',
       data,
       pagination: {
         page,
@@ -154,10 +141,7 @@ export class BlogService {
       );
     }
 
-    return {
-      status: 'success',
-      data: content,
-    };
+    return content;
   }
 
   async findBlogBySlug(slug: string) {
@@ -210,26 +194,14 @@ export class BlogService {
     });
 
     return {
-      status: 'success',
-      data: {
-        ...content,
-        tag: content.tag.map((tag) => ({
-          id: tag.uuid,
-          text: tag.name,
-        })),
-        creator: content.blog.creator.full_name,
-        ratings: content.rating.map((rating) => ({
-          ...rating,
-        })),
-        comments: content.comment.map((comment) => ({
-          ...comment,
-          commented_by_uuid: comment.user.uuid,
-          commented_by: comment.user.full_name,
-          profile: comment.user.profile,
-        })),
-        avg_rating,
-        latest_blogs: contentLatest,
-      },
+      ...content,
+      tag: content.tag.map((tag) => ({
+        id: tag.uuid,
+        text: tag.name,
+      })),
+      creator: content.blog.creator.full_name,
+      avg_rating,
+      latest_blogs: contentLatest,
     };
   }
 
@@ -241,8 +213,14 @@ export class BlogService {
     const { title, thumbnail, description, tags, category_name } =
       updateBlogDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      const content = await this.uuidHelper.validateUuidContent(contentUuid);
+    await this.prismaService.$transaction(async (prisma) => {
+      const content = await this.prismaService.content.findUnique({
+        where: { uuid: contentUuid },
+      });
+
+      if (!content) {
+        throw new NotFoundException('Content not found');
+      }
 
       const parsedTags = parseArrayInput(tags);
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
@@ -282,28 +260,12 @@ export class BlogService {
           },
         },
       });
-
-      return {
-        status: 'success',
-        message: 'Blog updated successfully',
-      };
     });
-    return res;
   }
 
   async removeBlogByUuid(contentUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await this.uuidHelper.validateUuidContent(contentUuid);
-
-      await prisma.content.delete({
-        where: { uuid: contentUuid },
-      });
-      return {
-        status: 'success',
-        message: 'Audio successfully deleted!',
-      };
+    await this.prismaService.content.delete({
+      where: { uuid: contentUuid },
     });
-
-    return res;
   }
 }

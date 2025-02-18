@@ -14,53 +14,44 @@ export class RatingService {
       throw new Error('Rating value must be between 1 and 5.');
     }
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { uuid: userUuid },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User is not found!');
-      }
-
-      const content = await prisma.content.findUniqueOrThrow({
-        where: { uuid: contentUuid },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!content) {
-        throw new NotFoundException('Content is not found!');
-      }
-
-      await prisma.rating.upsert({
-        where: {
-          rating_content: {
-            content_id: content.id,
-            rating_by: user.id,
-          },
-        },
-        update: {
-          rating_value: createRatingDto.rating_value,
-        },
-        create: {
-          content_id: content.id,
-          rating_by: user.id,
-          rating_value: createRatingDto.rating_value,
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'Successfully give a rating',
-      };
+    const user = await this.prismaService.user.findUnique({
+      where: { uuid: userUuid },
+      select: {
+        id: true,
+      },
     });
 
-    return res;
+    if (!user) {
+      throw new NotFoundException('User is not found!');
+    }
+
+    const content = await this.prismaService.content.findUnique({
+      where: { uuid: contentUuid },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!content) {
+      throw new NotFoundException('Content is not found!');
+    }
+
+    await this.prismaService.rating.upsert({
+      where: {
+        rating_content: {
+          content_id: content.id,
+          rating_by: user.id,
+        },
+      },
+      update: {
+        rating_value: createRatingDto.rating_value,
+      },
+      create: {
+        content_id: content.id,
+        rating_by: user.id,
+        rating_value: createRatingDto.rating_value,
+      },
+    });
   }
 
   async getUserRating(contentUuid: string, userUuid: string) {

@@ -4,11 +4,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { UpdateCompetitionDto } from './dto/update-competition.dto';
 
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
-import parseArrayInput from 'src/common/utils/parse-array';
-import { ContentStatus, ContentType, Prisma } from '@prisma/client';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
+import parseArrayInput from '@utils/parse-array.util';
+import { ContentStatus, ContentType } from '@prisma/client';
 import { FindCompetitionDto } from './dto/find-competition.dto';
-import competitionFilter from 'src/common/utils/filter/competition-filter';
+import competitionFilter from '@utils/competition-filter.util';
 
 @Injectable()
 export class CompetitionService {
@@ -18,7 +18,7 @@ export class CompetitionService {
   ) {}
 
   async createCompetition(data: CreateCompetitionDto) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const newSlug = await this.slugHelper.generateUniqueSlugCompe(data.title);
 
       const judge_uuids = parseArrayInput(data.judge_uuids);
@@ -67,18 +67,11 @@ export class CompetitionService {
           });
         }
       }
-
-      return {
-        status: 'success',
-        message: 'Competition Added Successfully!',
-      };
     });
-
-    return res;
   }
 
   async updateCompetition(uuid: string, data: UpdateCompetitionDto) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
+    await this.prismaService.$transaction(async (prisma) => {
       const newSlug = await this.slugHelper.generateUniqueSlug(data.title);
       const judge_uuids = parseArrayInput(data.judge_uuids);
       const competition = await prisma.competition.update({
@@ -140,14 +133,7 @@ export class CompetitionService {
           });
         }
       }
-
-      return {
-        status: 'success',
-        message: 'Competition updated successfully!',
-      };
     });
-
-    return res;
   }
 
   async findAllCompetition(query: FindCompetitionDto) {
@@ -167,7 +153,6 @@ export class CompetitionService {
     });
 
     return {
-      status: 'success',
       data: competition,
       pagination: {
         page,
@@ -188,10 +173,7 @@ export class CompetitionService {
         'Competition not found, please make sure you input correct competition',
       );
     }
-    return {
-      status: 'success',
-      data: competition,
-    };
+    return competition;
   }
 
   async getCompetitionDetail(
@@ -199,7 +181,7 @@ export class CompetitionService {
     type: string,
     status: string = ContentStatus.approved,
   ) {
-    const competition = await this.prismaService.competition.findUniqueOrThrow({
+    const competition = await this.prismaService.competition.findUnique({
       where: { slug, type: type as ContentType },
       include: {
         submission: {
@@ -264,10 +246,13 @@ export class CompetitionService {
       },
     });
 
-    return {
-      status: 'success',
-      data: competition,
-    };
+    if (!competition) {
+      throw new NotFoundException(
+        'Competition not found, please make sure you input correct competition',
+      );
+    }
+
+    return competition;
   }
 
   async getCompetitionBySlug(slug: string) {
@@ -290,23 +275,20 @@ export class CompetitionService {
     });
 
     return {
-      status: 'success',
-      data: {
-        ...competition,
-        judge: competition.judge.map((item) => ({
-          id: item.user.uuid,
-          text: item.user.full_name,
-        })),
-        evaluation_parameter: competition.evaluation_parameter.map((item) => ({
-          parameterName: item.parameter_name,
-          weight: item.weight,
-        })),
-      },
+      ...competition,
+      judge: competition.judge.map((item) => ({
+        id: item.user.uuid,
+        text: item.user.full_name,
+      })),
+      evaluation_parameter: competition.evaluation_parameter.map((item) => ({
+        parameterName: item.parameter_name,
+        weight: item.weight,
+      })),
     };
   }
 
   async getCompetitionByUuid(uuid: string) {
-    const competition = await this.prismaService.competition.findUniqueOrThrow({
+    const competition = await this.prismaService.competition.findUnique({
       where: { uuid },
       include: {
         submission: {
@@ -317,10 +299,13 @@ export class CompetitionService {
       },
     });
 
-    return {
-      status: 'success',
-      data: competition,
-    };
+    if (!competition) {
+      throw new NotFoundException(
+        'Competition not found, please make sure you input correct competition',
+      );
+    }
+
+    return competition;
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -429,9 +414,15 @@ export class CompetitionService {
   }
 
   async getWinnersForCompetition(uuid: string) {
-    const competition = await this.prismaService.competition.findUniqueOrThrow({
+    const competition = await this.prismaService.competition.findUnique({
       where: { uuid },
     });
+
+    if (!competition) {
+      throw new NotFoundException(
+        'Competition not found, please make sure you input correct competition',
+      );
+    }
     return this.prismaService.winner.findMany({
       where: { competition_id: competition.id },
       include: { submission: true },
@@ -440,17 +431,18 @@ export class CompetitionService {
   }
 
   async removeCompetition(competitionUuid: string) {
-    await this.prismaService.competition.findUniqueOrThrow({
+    const competition = await this.prismaService.competition.findUnique({
       where: { uuid: competitionUuid },
     });
+
+    if (!competition) {
+      throw new NotFoundException(
+        'Competition not found, please make sure you input correct competition',
+      );
+    }
 
     await this.prismaService.competition.delete({
       where: { uuid: competitionUuid },
     });
-
-    return {
-      status: 'success',
-      message: 'Competition deleted successfully!',
-    };
   }
 }

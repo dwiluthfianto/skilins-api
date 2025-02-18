@@ -1,15 +1,13 @@
-import { Logger, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { EbookService } from './ebooks.service';
 import { EbookController } from './ebooks.controller';
-import { PrismaModule } from 'src/prisma/prisma.module';
 
-import { UuidHelper } from 'src/common/helpers/uuid.helper';
-import { SlugHelper } from 'src/common/helpers/generate-unique-slug';
+import { SlugHelper } from '@utils/generate-unique-slug.util';
 import { FileUploadService } from '../file-upload/file-upload.service';
 
 @Module({
   controllers: [EbookController],
-  providers: [EbookService, UuidHelper, SlugHelper, FileUploadService, Logger],
-  imports: [PrismaModule],
+  providers: [EbookService, SlugHelper, FileUploadService],
+  imports: [],
 })
 export class EbookModule {}

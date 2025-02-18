@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RoleUserDto } from './dto/role-user.dto';
-import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class UserService {
@@ -10,19 +10,18 @@ export class UserService {
   async findOne(uuid: string) {
     const user = await this.prismaService.user.findUniqueOrThrow({
       where: { uuid },
-      include: { role: true },
+      include: { role: true, student: true, judge: true },
     });
 
     return {
-      status: 'success',
-      data: {
-        uuid: user.uuid,
-        profile: user.profile,
-        email: user.email,
-        full_name: user.full_name,
-        email_verified: user.email_verified,
-        role: user.role.name,
-      },
+      uuid: user.uuid,
+      profile: user.profile,
+      email: user.email,
+      full_name: user.full_name,
+      email_verified: user.email_verified,
+      role: user.role.name,
+      student: user.student,
+      judge: user.judge,
     };
   }
   async removeUser(uuid: string) {
@@ -54,12 +53,15 @@ export class UserService {
   }
 
   async updateRefreshToken(uuid: string, refreshToken: string) {
-    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    const hashedToken = crypto
+      .createHmac('sha256', process.env.AUTH_REFRESH_SECRET)
+      .update(refreshToken)
+      .digest('hex');
 
     await this.prismaService.user.update({
       where: { uuid },
       data: {
-        refresh_token: hashedRefreshToken,
+        refresh_token: hashedToken,
       },
     });
   }

@@ -8,26 +8,25 @@ import {
   Delete,
   Req,
   UseGuards,
-  HttpCode,
   HttpStatus,
   Query,
-  UseInterceptors,
-  UploadedFile,
-  Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { StoryService } from './stories.service';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { AddStoryEpisodeDto } from './dto/add-episode-story.dto.ts';
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { UpdateStoryEpisodeDto } from './dto/update-episode-story.dto.ts';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 
 @ApiTags('Stories')
 @ApiBearerAuth('JWT-auth')
@@ -39,170 +38,268 @@ export class StoryController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @UseInterceptors(FileInterceptor('thumbnail'))
+  @UseGuards(RolesGuard)
+  @FileUpload()
   @Roles('student')
   @ApiConsumes('multipart/form-data')
   async createStory(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Body() createStoryDto: CreateStoryDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
-    const file = this.fileUploadService.handleFileUpload(thumbnail);
-    createStoryDto.thumbnail = file.filePath;
-    const result = await this.storyService.create(user['sub'], createStoryDto);
-    return res.status(HttpStatus.CREATED).json(result);
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
+
+      await this.storyService.create(user['sub'], {
+        ...createStoryDto,
+        thumbnail: thumbnail.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Story successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Post(':storyUuid/episodes')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
+  @FileUpload()
   @Roles('student')
-  addEpisodeToStory(
+  async addEpisodeToStory(
     @Param('storyUuid') storyUuid: string,
     @Req() req: Request,
-    @Res() res: Response,
     @Body() addStoryEpisodeDto: AddStoryEpisodeDto,
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
-    const result = this.storyService.addEpisode(
-      storyUuid,
-      authorUuid,
-      addStoryEpisodeDto,
-    );
+    try {
+      await this.storyService.addEpisode(
+        storyUuid,
+        authorUuid,
+        addStoryEpisodeDto,
+      );
 
-    return res.status(HttpStatus.CREATED).json(result);
+      return SuccessResponse.create(
+        null,
+        'Episode successfully added to story!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @HttpCode(HttpStatus.OK)
-  findAllStoryByUser(@Query() query: FindContentQueryDto) {
-    return this.storyService.findAllStoryByUser(query);
+  @Public()
+  async getStories(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.storyService.findAllStoryByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Stories successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
   summaryStoryStudent(@Req() req: Request) {
     const user = req.user;
-    return this.storyService.summaryStoryStudent(user['sub']);
+    return SuccessResponse.create(
+      this.storyService.summaryStoryStudent(user['sub']),
+      'Summary story student successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
   summaryStoryStaff() {
-    return this.storyService.summaryStoryStaff();
+    return SuccessResponse.create(
+      this.storyService.summaryStoryStaff(),
+      'Summary story staff successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('staff')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  findAllStoryByStaff(@Query() query: FindContentQueryDto) {
-    return this.storyService.findAllStoryByStaff(query);
+  async getStoriesByStaff(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.storyService.findAllStoryByStaff(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Stories successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('student')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  @HttpCode(HttpStatus.OK)
-  async findUserStories(
+  async getUserStories(
     @Req() req: Request,
     @Query() query: FindContentQueryDto,
   ) {
     const user = req.user;
-    return await this.storyService.fetchUserStories(user['sub'], query);
+    const { data, pagination } = await this.storyService.fetchUserStories(
+      user['sub'],
+      query,
+    );
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Stories successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
+  @Public()
   getStoryWithEpisodes(@Param('slug') slug: string) {
-    return this.storyService.getStoryBySlug(slug);
+    return SuccessResponse.create(
+      this.storyService.getStoryBySlug(slug),
+      'Story successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('episode/:slug')
+  @Public()
   getOneEpisode(@Param('slug') slug: string, @Query('order') order: number) {
-    return this.storyService.getOneEpisode(slug, order);
+    return SuccessResponse.create(
+      this.storyService.getOneEpisode(slug, order),
+      'Episode successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('episodes/:slug')
+  @Public()
   getEpisode(@Param('slug') slug: string, @Query('order') order: number) {
-    return this.storyService.getEpisode(slug, order);
+    return SuccessResponse.create(
+      this.storyService.getEpisode(slug, order),
+      'Episode successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch('episodes/:episodeUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  updateEpisode(
+  async updateEpisode(
     @Param('episodeUuid') episodeUuid: string,
     @Req() req: Request,
     @Body() updateStoryEpisodeDto: UpdateStoryEpisodeDto,
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
-    return this.storyService.updateEpisode(
-      episodeUuid,
-      authorUuid,
-      updateStoryEpisodeDto,
-    );
+    try {
+      await this.storyService.updateEpisode(
+        episodeUuid,
+        authorUuid,
+        updateStoryEpisodeDto,
+      );
+
+      return SuccessResponse.create(
+        null,
+        'Episode successfully updated!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
+
   @Patch(':contentUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @UseInterceptors(FileInterceptor('thumbnail'))
+  @UseGuards(RolesGuard)
   @Roles('student')
+  @FileUpload()
   async updateStory(
     @Param('contentUuid') contentUuid: string,
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Req() req: Request,
-    @Res() res: Response,
     @Body() updateStoryDto: UpdateStoryDto,
   ) {
     const user = req.user;
     const authorUuid = user['sub'];
 
-    const isExist = await this.storyService.getStoryByUuid(contentUuid);
+    try {
+      const isExist = await this.storyService.getStoryByUuid(contentUuid);
 
-    if (thumbnail && thumbnail.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.thumbnail,
-        thumbnail,
+      const thumbnail = files.thumbnail
+        ? this.fileUploadService.updateFile(
+            isExist.thumbnail,
+            files.thumbnail[0],
+          )
+        : { filePath: isExist.thumbnail };
+
+      await this.storyService.updateStory(contentUuid, authorUuid, {
+        ...updateStoryDto,
+        thumbnail: thumbnail.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Story successfully updated!',
+        HttpStatus.OK,
       );
-      updateStoryDto.thumbnail = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    const updatedStory = this.storyService.updateStory(
-      contentUuid,
-      authorUuid,
-      updateStoryDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedStory);
   }
 
   @Delete('episodes/:episodeUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student', 'staff')
-  deleteEpisode(@Param('episodeUuid') episodeUuid: string) {
-    return this.storyService.deleteEpisode(episodeUuid);
+  async deleteEpisode(@Param('episodeUuid') episodeUuid: string) {
+    try {
+      await this.storyService.deleteEpisode(episodeUuid);
+
+      return SuccessResponse.create(
+        null,
+        'Episode successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Delete(':storyUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student', 'staff')
-  async deleteStory(
-    @Param('storyUuid') storyUuid: string,
-    @Res() res: Response,
-  ) {
+  async deleteStory(@Param('storyUuid') storyUuid: string) {
     const isExist = await this.storyService.getStoryByUuid(storyUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
-    const story = this.storyService.deleteStory(storyUuid);
+    try {
+      this.fileUploadService.deleteFile(isExist.thumbnail);
+      await this.storyService.deleteStory(storyUuid);
 
-    return res.status(HttpStatus.OK).json(story);
+      return SuccessResponse.create(
+        null,
+        'Story successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

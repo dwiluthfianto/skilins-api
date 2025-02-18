@@ -12,37 +12,52 @@ import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { ContentService } from './contents.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 import { ContentStatus } from '@prisma/client';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
 
 @ApiTags('Contents')
 @ApiBasicAuth('JWT-auth')
-
 @Controller({ path: 'contents', version: '1' })
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
 
   @Patch(':contentUuid/approve')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
   async approveContent(@Param('contentUuid') contentUuid: string) {
-    return this.contentService.updateContentStatus(
-      contentUuid,
-      ContentStatus.approved,
-    );
+    try {
+      return SuccessResponse.create(
+        await this.contentService.updateContentStatus(
+          contentUuid,
+          ContentStatus.approved,
+        ),
+        'Content approved successfully',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Patch(':contentUuid/reject')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
   async rejectContent(@Param('contentUuid') contentUuid: string) {
-    return this.contentService.updateContentStatus(
-      contentUuid,
-      ContentStatus.rejected,
-    );
+    try {
+      return SuccessResponse.create(
+        await this.contentService.updateContentStatus(
+          contentUuid,
+          ContentStatus.rejected,
+        ),
+        'Content rejected successfully',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get('search')
@@ -50,4 +65,3 @@ export class ContentController {
     return this.contentService.searchContents(query);
   }
 }
-

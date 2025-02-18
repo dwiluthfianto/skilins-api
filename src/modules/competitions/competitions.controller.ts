@@ -6,32 +6,23 @@ import {
   Patch,
   Param,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
   HttpStatus,
-  HttpCode,
   Query,
   Delete,
-  Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CompetitionService } from './competitions.service';
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { UpdateCompetitionDto } from './dto/update-competition.dto';
-import {
-  ApiBasicAuth,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
-import { Competition } from './entities/competition.entity';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
 import { FindCompetitionDto } from './dto/find-competition.dto';
 import { FileUploadService } from '../file-upload/file-upload.service';
-import { Response } from 'express';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { Public } from '@decorators/public.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
 
 @ApiTags('Competition')
 @ApiBasicAuth('JWT-auth')
@@ -43,103 +34,132 @@ export class CompetitionController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiCreatedResponse({
-    type: Competition,
-  })
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @ApiResponse({
-    status: 201,
-    description: 'The record has been successfully created.',
-  })
-  @ApiResponse({ status: 403, description: 'Forbidden.' })
+  @FileUpload()
   async create(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Body() createCompetitionDto: CreateCompetitionDto,
-    @Res() res: Response,
   ) {
-    const file = this.fileUploadService.handleFileUpload(thumbnail);
-    createCompetitionDto.thumbnail = file.filePath;
-    const result =
-      await this.competitionsService.createCompetition(createCompetitionDto);
-    return res.status(HttpStatus.CREATED).json(result);
+    try {
+      const file = this.fileUploadService.handleFileUpload(files.thumbnail[0]);
+      await this.competitionsService.createCompetition({
+        ...createCompetitionDto,
+        thumbnail: file.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Competition successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  findAll(@Query() query: FindCompetitionDto) {
-    return this.competitionsService.findAllCompetition(query);
+  @Public()
+  async getCompetitions(@Query() query: FindCompetitionDto) {
+    const { data, pagination } =
+      await this.competitionsService.findAllCompetition(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Competitions successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('/detail/:slug')
-  findOne(
+  @Public()
+  async getCompetitionDetail(
     @Param('slug') slug: string,
     @Query('status') status: string,
     @Query('type') type: string,
   ) {
-    return this.competitionsService.getCompetitionDetail(slug, type, status);
+    return SuccessResponse.create(
+      await this.competitionsService.getCompetitionDetail(slug, type, status),
+      'Competition detail successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
-  findOneBySlug(@Param('slug') slug: string) {
-    return this.competitionsService.getCompetitionBySlug(slug);
+  @Public()
+  async getCompetitionBySlug(@Param('slug') slug: string) {
+    return SuccessResponse.create(
+      await this.competitionsService.getCompetitionBySlug(slug),
+      'Competition successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':competitionUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiCreatedResponse({
-    type: Competition,
-  })
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @HttpCode(HttpStatus.OK)
+  @FileUpload()
   async update(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Param('competitionUuid') competitionUuid: string,
     @Body() updateCompetitionDto: UpdateCompetitionDto,
-    @Res() res: Response,
   ) {
-    const isExist =
-      await this.competitionsService.findCompetitionByUuid(competitionUuid);
+    try {
+      const isExist =
+        await this.competitionsService.findCompetitionByUuid(competitionUuid);
 
-    if (thumbnail && thumbnail.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.thumbnail,
-        thumbnail,
+      const thumbnail =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.handleFileUpload(files.thumbnail[0])
+          : { filePath: updateCompetitionDto.thumbnail };
+
+      await this.competitionsService.updateCompetition(competitionUuid, {
+        ...updateCompetitionDto,
+        thumbnail: thumbnail.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Competition successfully updated!',
+        HttpStatus.OK,
       );
-      updateCompetitionDto.thumbnail = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-    const competition = await this.competitionsService.updateCompetition(
-      competitionUuid,
-      updateCompetitionDto,
-    );
-
-    return res.status(HttpStatus.OK).json(competition);
   }
 
   @Delete(':competitionUuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @ApiOkResponse({ type: Competition })
-  @HttpCode(HttpStatus.OK)
-  async remove(
-    @Param('competitionUuid') competitionUuid: string,
-    @Res() res: Response,
-  ) {
-    const isExist =
-      await this.competitionsService.getCompetitionByUuid(competitionUuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+  async removeCompetition(@Param('competitionUuid') competitionUuid: string) {
+    try {
+      const isExist =
+        await this.competitionsService.getCompetitionByUuid(competitionUuid);
+      this.fileUploadService.deleteFile(isExist.thumbnail);
 
-    const result =
       await this.competitionsService.removeCompetition(competitionUuid);
 
-    return res.status(HttpStatus.OK).json(result);
+      return SuccessResponse.create(
+        null,
+        'Competition successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get(':uuid/winners')
+  @Public()
   async getCompetitionWinners(@Param('uuid') uuid: string) {
-    return this.competitionsService.getWinnersForCompetition(uuid);
+    return SuccessResponse.create(
+      await this.competitionsService.getWinnersForCompetition(uuid),
+      'Competition winners successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 }

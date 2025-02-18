@@ -16,12 +16,14 @@ import { RegisterJudgeDto } from '../dto/register-judge.dto';
 import { JudgeService } from './judge.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/modules/roles/roles.decorator';
+import { Roles } from '@decorators/roles.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EvaluateSubmissionDto } from '../dto/evaluate-submission.dto';
 import { UpdateJudgeDto } from '../dto/update-judge.dto';
 import { Request } from 'express';
 import { FindJudgeDto } from '../dto/find-judge.dto';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
 
 @ApiTags('judge')
 @ApiBearerAuth('JWT-auth')
@@ -32,15 +34,29 @@ export class JudgeController {
 
   @Get()
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  async findAllJudges(@Query() query: FindJudgeDto) {
-    return await this.judgeService.findAllJudges(query);
+  async getJudges(@Query() query: FindJudgeDto) {
+    const { data, pagination } = await this.judgeService.findAllJudges(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Judges successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Post('add')
   @Roles('staff')
   async registerJudge(@Body() registerJudgeDto: RegisterJudgeDto) {
-    return await this.judgeService.regisNewJudge(registerJudgeDto);
+    try {
+      await this.judgeService.regisNewJudge(registerJudgeDto);
+      return SuccessResponse.create(
+        null,
+        'Judge successfully registered!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Patch(':judgeUuid')
@@ -49,13 +65,31 @@ export class JudgeController {
     @Param('judgeUuid') judgeUuid: string,
     @Body() updateJudgeDto: UpdateJudgeDto,
   ) {
-    return await this.judgeService.updateInfoJudge(judgeUuid, updateJudgeDto);
+    try {
+      await this.judgeService.updateInfoJudge(judgeUuid, updateJudgeDto);
+      return SuccessResponse.create(
+        null,
+        'Judge successfully updated!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Delete(':judgeUuid')
   @Roles('staff')
   async removeJudge(@Param('judgeUuid') judgeUuid: string) {
-    return await this.judgeService.removeJudge(judgeUuid);
+    try {
+      await this.judgeService.removeJudge(judgeUuid);
+      return SuccessResponse.create(
+        null,
+        'Judge successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Patch(':judgeUuid/submission')
@@ -64,40 +98,61 @@ export class JudgeController {
     @Param('judgeUuid') judgeUuid: string,
     @Body() evaluateSubmissionDto: EvaluateSubmissionDto,
   ) {
-    return await this.judgeService.evaluateSubmission(
-      judgeUuid,
-      evaluateSubmissionDto,
-    );
+    try {
+      await this.judgeService.evaluateSubmission(
+        judgeUuid,
+        evaluateSubmissionDto,
+      );
+      return SuccessResponse.create(
+        null,
+        'Submission successfully evaluated!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get('scored/:competitionUuid')
   @Roles('judge')
-  @HttpCode(HttpStatus.OK)
   async scoredSubmission(@Param('competitionUuid') competitionUuid: string) {
-    return await this.judgeService.getScoredSubmission(competitionUuid);
+    return SuccessResponse.create(
+      await this.judgeService.getScoredSubmission(competitionUuid),
+      'Scored submission successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('unscored/:competitionUuid')
   @Roles('judge')
-  @HttpCode(HttpStatus.OK)
   async unscoredSubmission(@Param('competitionUuid') competitionUuid: string) {
-    return await this.judgeService.getUnscoredSubmission(competitionUuid);
+    return SuccessResponse.create(
+      await this.judgeService.getUnscoredSubmission(competitionUuid),
+      'Unscored submission successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get('detail')
   @Roles('judge')
-  @HttpCode(HttpStatus.OK)
   async summaryJudges(@Req() req: Request) {
     const user = req.user;
-    return await this.judgeService.getJudge(user['sub']);
+    return SuccessResponse.create(
+      await this.judgeService.getJudge(user['sub']),
+      'Judge successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':competitionUuid/evaluation-parameters')
   @Roles('judge')
-  @HttpCode(HttpStatus.OK)
   async getEvaluationParameters(
     @Param('competitionUuid') competitionUuid: string,
   ) {
-    return this.judgeService.findAllEvaluationParameter(competitionUuid);
+    return SuccessResponse.create(
+      await this.judgeService.findAllEvaluationParameter(competitionUuid),
+      'Evaluation parameters successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 }

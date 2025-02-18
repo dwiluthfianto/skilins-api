@@ -11,18 +11,9 @@ export class MajorService {
   async create(createMajorDto: CreateMajorDto) {
     const { name, avatar, description, image } = createMajorDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await prisma.major.create({
-        data: { name, avatar, description, image },
-      });
-
-      return {
-        status: 'success',
-        message: 'Majors succesfully added!',
-      };
+    await this.prismaService.major.create({
+      data: { name, avatar, description, image },
     });
-
-    return res;
   }
 
   async findAllMajor(name: string) {
@@ -36,10 +27,7 @@ export class MajorService {
     const major = await this.prismaService.major.findMany({
       where: { ...filterName },
     });
-    return {
-      status: 'success',
-      data: major,
-    };
+    return major;
   }
 
   async findMajorByUuid(majorUuid: string) {
@@ -50,57 +38,38 @@ export class MajorService {
     if (!major) {
       throw new NotFoundException(`Major does not exist.`);
     }
-    return {
-      status: 'success',
-      data: major,
-    };
+    return major;
   }
 
   async updateMajorByUuid(majorUuid: string, updateMajorDto: UpdateMajorDto) {
     const { name, avatar, description, image } = updateMajorDto;
 
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      const major = await prisma.major.findUniqueOrThrow({
-        where: { uuid: majorUuid },
-      });
-
-      if (!major) {
-        throw new NotFoundException('Major is not found!');
-      }
-
-      await prisma.major.update({
-        where: { uuid: majorUuid },
-        data: {
-          name,
-          avatar,
-          description,
-          image,
-        },
-      });
-
-      return {
-        status: 'success',
-        message: 'Major succesfully updated!',
-      };
+    const major = await this.prismaService.major.findUniqueOrThrow({
+      where: { uuid: majorUuid },
     });
 
-    return res;
+    if (!major) {
+      throw new NotFoundException('Major is not found!');
+    }
+
+    await this.prismaService.major.update({
+      where: { uuid: majorUuid },
+      data: {
+        name,
+        avatar,
+        description,
+        image,
+      },
+    });
   }
 
   async removeMajorByUuid(majorUuid: string) {
-    const res = await this.prismaService.$transaction(async (prisma) => {
-      await prisma.major.findUniqueOrThrow({
-        where: { uuid: majorUuid },
-      });
-
-      await prisma.major.delete({
-        where: { uuid: majorUuid },
-      });
-      return {
-        status: 'success',
-        message: 'Major successfully deleted!',
-      };
+    await this.prismaService.major.findUniqueOrThrow({
+      where: { uuid: majorUuid },
     });
-    return res;
+
+    await this.prismaService.major.delete({
+      where: { uuid: majorUuid },
+    });
   }
 }

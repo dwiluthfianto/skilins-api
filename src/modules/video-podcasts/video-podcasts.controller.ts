@@ -14,6 +14,7 @@ import {
   Query,
   Req,
   Res,
+  UploadedFiles,
 } from '@nestjs/common';
 import { VideoPodcastService } from './video-podcasts.service';
 import { CreateVideoPodcastDto } from './dto/create-video-podcast.dto';
@@ -28,12 +29,16 @@ import {
 } from '@nestjs/swagger';
 import { VideoPodcast } from './entities/video-podcast.entity';
 import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { Request, Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 
 @ApiTags('Videos')
 @ApiBearerAuth('JWT-auth')
@@ -45,142 +50,179 @@ export class VideoPodcastController {
   ) {}
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
   @ApiCreatedResponse({
     type: VideoPodcast,
   })
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async create(
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Body() createVideoPodcastDto: CreateVideoPodcastDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
 
-    const file = this.fileUploadService.handleFileUpload(thumbnail);
-    createVideoPodcastDto.thumbnail = file.filePath;
+    try {
+      const thumbnail = this.fileUploadService.handleFileUpload(
+        files.thumbnail[0],
+      );
 
-    const result = await this.videoPodcastService.create(
-      user['sub'],
-      createVideoPodcastDto,
-    );
-    return res.status(HttpStatus.CREATED).json(result);
+      await this.videoPodcastService.create(user['sub'], {
+        ...createVideoPodcastDto,
+        thumbnail: thumbnail.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Video created successfully',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: VideoPodcast,
-    isArray: true,
-  })
-  @HttpCode(HttpStatus.OK)
-  findAllVideoByUser(@Query() query: FindContentQueryDto) {
-    return this.videoPodcastService.findAllVideoByUser(query);
+  @Public()
+  async getVideos(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.videoPodcastService.findAllVideoByUser(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Videos fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('staff')
-  @ApiOkResponse({
-    type: VideoPodcast,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  findAllVideoByStaff(@Query() query: FindContentQueryDto) {
-    return this.videoPodcastService.findAllVideoByStaff(query);
+  async getVideosStaff(@Query() query: FindContentQueryDto) {
+    const { data, pagination } =
+      await this.videoPodcastService.findAllVideoByStaff(query);
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Videos fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-student')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
   async summaryAudioStudent(@Req() req: Request) {
     const user = req.user;
-    return this.videoPodcastService.summaryVideoStudent(user['sub']);
+    return SuccessResponse.create(
+      this.videoPodcastService.summaryVideoStudent(user['sub']),
+      'Video summary fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('summary-staff')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
   async summaryAudioStaff() {
-    return this.videoPodcastService.summaryVideoStaff();
+    return SuccessResponse.create(
+      this.videoPodcastService.summaryVideoStaff(),
+      'Video summary fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get('student')
-  @ApiOkResponse({
-    type: VideoPodcast,
-    isArray: true,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('student')
-  @HttpCode(HttpStatus.OK)
-  async findUserVideo(
+  async getUserVideos(
     @Req() req: Request,
     @Query() query: FindContentQueryDto,
   ) {
     const user = req.user;
-    return await this.videoPodcastService.fetchUserVideos(user['sub'], query);
+    const { data, pagination } = await this.videoPodcastService.fetchUserVideos(
+      user['sub'],
+      query,
+    );
+    return SuccessResponse.paginate(
+      data,
+      pagination,
+      'Videos fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':slug')
-  @ApiOkResponse({
-    type: VideoPodcast,
-  })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('slug') slug: string) {
-    return this.videoPodcastService.findVideoBySlug(slug);
+  @Public()
+  getVideoBySlug(@Param('slug') slug: string) {
+    return SuccessResponse.create(
+      this.videoPodcastService.findVideoBySlug(slug),
+      'Video fetched successfully',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':uuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
-  @UseInterceptors(FileInterceptor('thumbnail'))
-  @ApiOkResponse({
-    type: VideoPodcast,
-  })
-  @ApiConsumes('multipart/form-data')
+  @FileUpload()
   async update(
     @Param('uuid') uuid: string,
-    @UploadedFile()
-    thumbnail: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+    },
     @Body() updateVideoPodcastDto: UpdateVideoPodcastDto,
     @Req() req: Request,
-    @Res() res: Response,
   ) {
     const user = req.user;
-    const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
 
-    if (thumbnail && thumbnail.size > 0) {
-      const file = this.fileUploadService.updateFile(
-        isExist.data.thumbnail,
-        thumbnail,
+    try {
+      const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
+
+      const file =
+        files.thumbnail && files.thumbnail[0]
+          ? this.fileUploadService.updateFile(
+              isExist.thumbnail,
+              files.thumbnail[0],
+            )
+          : { filePath: isExist.thumbnail };
+
+      await this.videoPodcastService.updateVideoByUuid(uuid, user['sub'], {
+        ...updateVideoPodcastDto,
+        thumbnail: file.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Video updated successfully',
+        HttpStatus.OK,
       );
-      updateVideoPodcastDto.thumbnail = file.filePath;
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
     }
-
-    const updatedVideo = await this.videoPodcastService.updateVideoByUuid(
-      uuid,
-      user['sub'],
-      updateVideoPodcastDto,
-    );
-
-    return res.status(HttpStatus.OK).json(updatedVideo);
   }
 
   @Delete(':uuid')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff', 'student')
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('uuid') uuid: string, @Res() res: Response) {
-    const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
-    this.fileUploadService.deleteFile(isExist.data.thumbnail);
+  async remove(@Param('uuid') uuid: string) {
+    try {
+      const isExist = await this.videoPodcastService.findVideoByUuid(uuid);
+      this.fileUploadService.deleteFile(isExist.thumbnail);
 
-    const audio = await this.videoPodcastService.removeVideoByUuid(uuid);
+      await this.videoPodcastService.removeVideoByUuid(uuid);
 
-    return res.status(HttpStatus.OK).json(audio);
+      return SuccessResponse.create(
+        null,
+        'Video deleted successfully',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }

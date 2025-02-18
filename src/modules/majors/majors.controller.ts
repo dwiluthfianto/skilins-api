@@ -28,10 +28,14 @@ import {
 import { Major } from './entities/major.entity';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { FileUploadService } from '../file-upload/file-upload.service';
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { SuccessResponse } from '@utils/api-response.util';
+import { ApiException } from '@exceptions/api-exception';
+import { Public } from '@decorators/public.decorator';
 @ApiTags('Major')
 @Controller({ path: 'majors', version: '1' })
 @ApiBasicAuth('JWT-auth')
@@ -43,41 +47,38 @@ export class MajorController {
   ) {}
 
   @Post()
-  @ApiCreatedResponse({
-    type: Major,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'image', maxCount: 1 },
-      { name: 'avatar', maxCount: 1 },
-    ]),
-  )
-  @ApiConsumes('multipart/form-data')
-  async create(
+  @FileUpload()
+  async createMajor(
     @UploadedFiles()
     files: {
       image?: Express.Multer.File[];
       avatar?: Express.Multer.File[];
     },
     @Body() createMajorDto: CreateMajorDto,
-    @Res() res: Response,
   ) {
-    const image = this.fileUploadService.handleFileUpload(files.image[0]);
-    createMajorDto.image = image.filePath;
+    try {
+      const image = this.fileUploadService.handleFileUpload(files.image[0]);
 
-    const avatar = this.fileUploadService.handleFileUpload(files.avatar[0]);
-    createMajorDto.avatar = avatar.filePath;
-    const result = await this.majorService.create(createMajorDto);
-    return res.status(HttpStatus.CREATED).json(result);
+      const avatar = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      await this.majorService.create({
+        ...createMajorDto,
+        image: image.filePath,
+        avatar: avatar.filePath,
+      });
+      return SuccessResponse.create(
+        null,
+        'Major successfully created!',
+        HttpStatus.CREATED,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Get()
-  @ApiOkResponse({
-    type: Major,
-    isArray: true,
-  })
+  @Public()
   @ApiQuery({
     name: 'search',
     required: false,
@@ -85,33 +86,29 @@ export class MajorController {
     description: 'search by name for categories',
   })
   @HttpCode(HttpStatus.OK)
-  findAll(@Query('search') search: string) {
-    return this.majorService.findAllMajor(search);
+  async getMajors(@Query('search') search: string) {
+    return SuccessResponse.create(
+      await this.majorService.findAllMajor(search),
+      'Major successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Get(':majorUuid')
-  @ApiOkResponse({
-    type: Major,
-  })
-  @HttpCode(HttpStatus.OK)
-  findOne(@Param('majorUuid') majorUuid: string) {
-    return this.majorService.removeMajorByUuid(majorUuid);
+  @Public()
+  async getMajorByUuid(@Param('majorUuid') majorUuid: string) {
+    return SuccessResponse.create(
+      await this.majorService.findMajorByUuid(majorUuid),
+      'Major successfully fetched!',
+      HttpStatus.OK,
+    );
   }
 
   @Patch(':majorUuid')
-  @ApiOkResponse({
-    type: Major,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'image', maxCount: 1 },
-      { name: 'avatar', maxCount: 1 },
-    ]),
-  )
-  @ApiConsumes('multipart/form-data')
-  async update(
+  @FileUpload()
+  async updateMajor(
     @Param('majorUuid') majorUuid: string,
     @UploadedFiles()
     files: {
@@ -119,46 +116,53 @@ export class MajorController {
       avatar?: Express.Multer.File[];
     },
     @Body() updateMajorDto: UpdateMajorDto,
-    @Res() res: Response,
   ) {
-    const isExist = await this.majorService.findMajorByUuid(majorUuid);
+    try {
+      const isExist = await this.majorService.findMajorByUuid(majorUuid);
 
-    if (files.image && files.image.length > 0) {
-      const image = this.fileUploadService.updateFile(
-        isExist.data.image,
-        files.image[0],
-      );
-      updateMajorDto.image = image.filePath;
-    }
-    if (files.avatar && files.avatar.length > 0) {
-      const avatar = this.fileUploadService.updateFile(
-        isExist.data.avatar,
-        files.avatar[0],
-      );
-      updateMajorDto.avatar = avatar.filePath;
-    }
-    const updatedMajor = await this.majorService.updateMajorByUuid(
-      majorUuid,
-      updateMajorDto,
-    );
+      const image =
+        files.image && files.image[0]
+          ? this.fileUploadService.updateFile(isExist.image, files.image[0])
+          : { filePath: isExist.image };
+      const avatar =
+        files.avatar && files.avatar[0]
+          ? this.fileUploadService.updateFile(isExist.avatar, files.avatar[0])
+          : { filePath: isExist.avatar };
 
-    return res.status(HttpStatus.OK).json(updatedMajor);
+      await this.majorService.updateMajorByUuid(majorUuid, {
+        ...updateMajorDto,
+        image: image.filePath,
+        avatar: avatar.filePath,
+      });
+
+      return SuccessResponse.create(
+        null,
+        'Major successfully updated!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 
   @Delete(':majorUuid')
-  @ApiOkResponse({
-    type: Major,
-  })
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles('staff')
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('majorUuid') majorUuid: string, @Res() res: Response) {
-    const isExist = await this.majorService.findMajorByUuid(majorUuid);
-    this.fileUploadService.deleteFile(isExist.data.avatar);
-    this.fileUploadService.deleteFile(isExist.data.image);
+  async removeMajor(@Param('majorUuid') majorUuid: string) {
+    try {
+      const isExist = await this.majorService.findMajorByUuid(majorUuid);
+      this.fileUploadService.deleteFile(isExist.avatar);
+      this.fileUploadService.deleteFile(isExist.image);
 
-    const major = await this.majorService.removeMajorByUuid(majorUuid);
+      await this.majorService.removeMajorByUuid(majorUuid);
 
-    return res.status(HttpStatus.OK).json(major);
+      return SuccessResponse.create(
+        null,
+        'Major successfully deleted!',
+        HttpStatus.OK,
+      );
+    } catch (error) {
+      throw new ApiException(error.message, error.status);
+    }
   }
 }
