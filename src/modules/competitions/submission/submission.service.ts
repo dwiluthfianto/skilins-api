@@ -28,6 +28,33 @@ export class SubmissionService {
       where: { slug: competition_slug },
     });
 
+    const user = await this.prismaService.user.findUniqueOrThrow({
+      where: {
+        uuid: userUuid,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            uuid: true,
+          },
+        },
+      },
+    });
+
+    const submission = await this.prismaService.submission.findFirst({
+      where: {
+        student_id: user.student.id,
+        competition_id: competition.id,
+      },
+    });
+
+    if (submission) {
+      throw new BadRequestException(
+        'You have already submitted to this competition.',
+      );
+    }
+
     if (new Date() > competition.submission_deadline) {
       throw new BadRequestException('Submission deadline has passed.');
     }
@@ -50,28 +77,16 @@ export class SubmissionService {
       );
     }
 
-    if (!content || competition.type !== content.data.type) {
+    if (!content || competition.type !== content.type) {
       throw new BadRequestException(
         'Content category does not match competition category.',
       );
     }
-    const userData = await this.prismaService.user.findUniqueOrThrow({
-      where: {
-        uuid: userUuid,
-      },
-      include: {
-        student: {
-          select: {
-            uuid: true,
-          },
-        },
-      },
-    });
 
     await this.prismaService.submission.create({
       data: {
-        student: { connect: { uuid: userData.student.uuid } },
-        content: { connect: { uuid: content.data.uuid } },
+        student: { connect: { uuid: user.student.uuid } },
+        content: { connect: { uuid: content.uuid } },
         competition: { connect: { slug: competition_slug } },
       },
     });

@@ -26,7 +26,10 @@ export class EmailService {
 
   private loadTemplate(templateName: string): handlebars.TemplateDelegate {
     const templatesFolderPath = path.join(__dirname, './templates');
-    const templatePath = path.join(templatesFolderPath, templateName);
+
+    const templatePath = path.join(templatesFolderPath, `${templateName}.hbs`);
+
+    console.log(templatePath);
 
     try {
       const templateSource = fs.readFileSync(templatePath, 'utf8');
@@ -93,12 +96,12 @@ export class EmailService {
     const template = this.getTemplate('submission-approved');
     const html = template({
       name,
-      competitionName,
-      titleSubmission,
-      submissionId,
-      submissionDate,
-      judgingDates,
-      announcementDate,
+      competition_name: competitionName,
+      title_submission: titleSubmission,
+      submission_id: submissionId,
+      submission_date: submissionDate,
+      judging_dates: judgingDates,
+      announcement_date: announcementDate,
     });
     await this.sendMail(email, 'Submission Approved', html);
   }
@@ -114,10 +117,10 @@ export class EmailService {
     const template = this.getTemplate('submission-rejected');
     const html = template({
       name,
-      competitionName,
-      titleSubmission,
-      submissionId,
-      submissionDate,
+      competition_name: competitionName,
+      title_submission: titleSubmission,
+      submission_id: submissionId,
+      submission_date: submissionDate,
     });
     await this.sendMail(email, 'Submission Rejected', html);
   }

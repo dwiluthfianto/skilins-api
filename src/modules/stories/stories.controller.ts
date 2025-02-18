@@ -171,9 +171,9 @@ export class StoryController {
 
   @Get(':slug')
   @Public()
-  getStoryWithEpisodes(@Param('slug') slug: string) {
+  async getStoryWithEpisodes(@Param('slug') slug: string) {
     return SuccessResponse.create(
-      this.storyService.getStoryBySlug(slug),
+      await this.storyService.getStoryBySlug(slug),
       'Story successfully fetched!',
       HttpStatus.OK,
     );

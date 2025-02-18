@@ -33,7 +33,7 @@ export class AudioPodcastService {
       genres,
     } = data;
 
-    await this.prismaService.$transaction(async (prisma) => {
+    const res = await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
       const parsedTags = parseArrayInput(tags);
 
@@ -106,6 +106,8 @@ export class AudioPodcastService {
 
       return newContent;
     });
+
+    return res;
   }
 
   async findAllAudioByUser(findContentQueryDto: FindContentQueryDto) {

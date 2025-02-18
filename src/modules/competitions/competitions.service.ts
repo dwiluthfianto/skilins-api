@@ -191,10 +191,6 @@ export class CompetitionService {
             },
           },
           select: {
-            id: false,
-            student_id: false,
-            content_id: false,
-            competition_id: false,
             uuid: true,
             content: {
               select: {
@@ -203,6 +199,7 @@ export class CompetitionService {
                 title: true,
                 thumbnail: true,
                 slug: true,
+                status: true,
               },
             },
           },

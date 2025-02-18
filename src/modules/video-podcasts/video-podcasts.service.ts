@@ -29,7 +29,7 @@ export class VideoPodcastService {
     const { title, thumbnail, description, tags, category_name, genres, link } =
       createVideoPodcastDto;
 
-    await this.prismaService.$transaction(async (prisma) => {
+    const res = await this.prismaService.$transaction(async (prisma) => {
       const parsedGenres = parseArrayInput(genres);
 
       const parsedTags = parseArrayInput(tags);
@@ -88,6 +88,8 @@ export class VideoPodcastService {
       });
       return newContent;
     });
+
+    return res;
   }
 
   async findAllVideoByUser(findContentQueryDto: FindContentQueryDto) {
@@ -328,7 +330,11 @@ export class VideoPodcastService {
         },
         submission: {
           include: {
-            competition: true,
+            competition: {
+              select: {
+                uuid: true,
+              },
+            },
           },
         },
       },

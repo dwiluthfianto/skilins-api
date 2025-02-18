@@ -49,7 +49,6 @@ export class ErrorResponse {
       code,
       path,
       timestamp: new Date().toISOString(),
-      data: null,
       ...(errors && { errors }),
     };
   }

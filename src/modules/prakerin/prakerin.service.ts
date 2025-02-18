@@ -11,12 +11,13 @@ import { SlugHelper } from '@utils/generate-unique-slug.util';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { FindPrakerinQueryDto } from '../contents/dto/find-prakerin-query.dto';
 import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
-
+import { UserService } from 'src/modules/users/users.service';
 @Injectable()
 export class PrakerinService {
   constructor(
     private prismaService: PrismaService,
     private readonly slugHelper: SlugHelper,
+    private readonly userService: UserService,
   ) {}
   async createPrakerin(
     creatorUuid: string,
@@ -24,27 +25,21 @@ export class PrakerinService {
   ) {
     const { title, thumbnail, description, pages, file } = createPrakerinDto;
 
-    await this.prismaService.$transaction(async (prisma) => {
-      const newSlug = await this.slugHelper.generateUniqueSlug(title);
-      const userData = await prisma.user.findUniqueOrThrow({
-        where: {
-          uuid: creatorUuid,
-        },
-        include: {
-          student: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      });
+    const newSlug = await this.slugHelper.generateUniqueSlug(title);
+    const user = await this.userService.findOne(creatorUuid);
+    const isPrakerinExist = await this.prismaService.prakerin.findFirst({
+      where: {
+        creator_id: user.student.id,
+      },
+    });
 
-      if (!userData) {
-        throw new NotFoundException(
-          'User not found, please make sure you input correct user',
-        );
-      }
+    if (isPrakerinExist) {
+      throw new BadRequestException(
+        'You already have a prakerin, please update it instead of creating a new one',
+      );
+    }
 
+    const res = await this.prismaService.$transaction(async (prisma) => {
       const fileAttachment = await prisma.fileAttachment.create({
         data: {
           file: file,
@@ -62,7 +57,7 @@ export class PrakerinService {
           category: { connect: { name: 'Non-fiction' } },
           prakerin: {
             create: {
-              creator_id: userData.student.id,
+              creator_id: user.student.id,
               pages,
               file_id: fileAttachment.id,
               published_at: new Date(),
@@ -70,7 +65,11 @@ export class PrakerinService {
           },
         },
       });
+
+      return newContent;
     });
+
+    return res;
   }
 
   async findAllPrakerinByUser(findPrakerinQueryDto: FindPrakerinQueryDto) {
@@ -272,6 +271,15 @@ export class PrakerinService {
             },
           },
         },
+        submission: {
+          include: {
+            competition: {
+              select: {
+                uuid: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -307,6 +315,7 @@ export class PrakerinService {
         select: {
           id: true,
           uuid: true,
+          status: true,
           prakerin: {
             select: {
               uuid: true,
@@ -322,6 +331,13 @@ export class PrakerinService {
           'Content not found, please make sure you input correct content',
         );
       }
+
+      if (content.status === ContentStatus.approved) {
+        throw new BadRequestException(
+          'Prakerin is already approved, you cannot update it',
+        );
+      }
+
       const creator = await prisma.user.findUniqueOrThrow({
         where: { uuid: creatorUuid },
         select: {

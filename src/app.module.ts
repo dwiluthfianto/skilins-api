@@ -30,8 +30,9 @@ import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './common/logger/wingston.config';
-import { GlobalExceptionFilter } from './common/filters/global-exception';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { ApiResponseInterceptor } from '@interceptors/api-response.interceptor';
 
 @Module({
   imports: [
@@ -76,7 +77,11 @@ import { APP_FILTER } from '@nestjs/core';
   providers: [
     {
       provide: APP_FILTER,
-      useClass: GlobalExceptionFilter,
+      useClass: ApiExceptionFilter,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ApiResponseInterceptor,
     },
   ],
 })

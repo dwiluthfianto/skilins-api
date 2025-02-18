@@ -118,7 +118,7 @@ export class VideoPodcastController {
   async summaryAudioStudent(@Req() req: Request) {
     const user = req.user;
     return SuccessResponse.create(
-      this.videoPodcastService.summaryVideoStudent(user['sub']),
+      await this.videoPodcastService.summaryVideoStudent(user['sub']),
       'Video summary fetched successfully',
       HttpStatus.OK,
     );
@@ -129,7 +129,7 @@ export class VideoPodcastController {
   @Roles('staff')
   async summaryAudioStaff() {
     return SuccessResponse.create(
-      this.videoPodcastService.summaryVideoStaff(),
+      await this.videoPodcastService.summaryVideoStaff(),
       'Video summary fetched successfully',
       HttpStatus.OK,
     );
@@ -157,9 +157,9 @@ export class VideoPodcastController {
 
   @Get(':slug')
   @Public()
-  getVideoBySlug(@Param('slug') slug: string) {
+  async getVideoBySlug(@Param('slug') slug: string) {
     return SuccessResponse.create(
-      this.videoPodcastService.findVideoBySlug(slug),
+      await this.videoPodcastService.findVideoBySlug(slug),
       'Video fetched successfully',
       HttpStatus.OK,
     );

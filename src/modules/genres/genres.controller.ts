@@ -7,13 +7,10 @@ import {
   Param,
   Delete,
   UseGuards,
-  UseInterceptors,
   HttpCode,
   HttpStatus,
-  UploadedFile,
-  Query,
-  Res,
   UploadedFiles,
+  Query,
 } from '@nestjs/common';
 import { GenreService } from './genres.service';
 import { CreateGenreDto } from './dto/create-genre.dto';
@@ -26,13 +23,9 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Genre } from './entities/genre.entity';
-import { Response } from 'express';
-import { FileUploadService } from '../file-upload/file-upload.service';
+import { RolesGuard } from '@guards/roles.guard';
+import { Roles } from '@decorators/roles.decorator';
+import { FileUploadService } from '@modules/file-upload/file-upload.service';
 import { FindGenreDto } from './dto/find-genre.dto';
 import { FileUpload } from '@decorators/file-upload.decorator';
 import { SuccessResponse } from '@utils/api-response.util';

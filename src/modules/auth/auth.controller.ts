@@ -59,7 +59,7 @@ export class AuthController {
         name: 'refresh_token',
         value: refresh_token,
         options: {
-          maxAge: ms(process.env.AUTH_JWT_TOKEN_EXPIRES_IN as any),
+          maxAge: ms(process.env.AUTH_REFRESH_TOKEN_EXPIRES_IN as any),
         },
       },
     ];
@@ -131,7 +131,7 @@ export class AuthController {
         name: 'refresh_token',
         value: refresh_token,
         options: {
-          maxAge: ms(process.env.AUTH_JWT_TOKEN_EXPIRES_IN as any),
+          maxAge: ms(process.env.AUTH_REFRESH_TOKEN_EXPIRES_IN as any),
         },
       },
     ];
