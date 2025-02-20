@@ -12,6 +12,8 @@ import { ContentStatus } from '@prisma/client';
 import parseArrayInput from '@utils/parse-array.util';
 import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { contentFilterByUser } from '@utils/content-filter.util';
+import { processImage } from '@utils/process-image.util';
+import { getRandomImage } from '@utils/process-image.util';
 
 @Injectable()
 export class EbookService {
@@ -67,6 +69,8 @@ export class EbookService {
         throw new BadRequestException('Category not found');
       }
 
+      const imageUrl = await processImage(getRandomImage(), 'ebook');
+
       await prisma.content.create({
         data: {
           type: 'ebook',
@@ -82,6 +86,7 @@ export class EbookService {
               },
               create: {
                 name: tag.text,
+                avatar: imageUrl,
               },
             })),
           },
@@ -103,6 +108,7 @@ export class EbookService {
               },
               create: {
                 name: genre.text,
+                avatar: imageUrl,
               },
             })),
           },
@@ -305,6 +311,8 @@ export class EbookService {
         },
       });
 
+      const imageUrl = await processImage(getRandomImage(), 'ebook');
+
       await prisma.content.update({
         where: { uuid: contentUuid, type: 'ebook' },
         data: {
@@ -318,6 +326,7 @@ export class EbookService {
               },
               create: {
                 name: tag.text,
+                avatar: imageUrl,
               },
             })),
           },
@@ -342,6 +351,7 @@ export class EbookService {
               },
               create: {
                 name: genre.text,
+                avatar: imageUrl,
               },
             })),
           },

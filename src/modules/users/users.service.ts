@@ -1,7 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RoleUserDto } from './dto/role-user.dto';
 import * as crypto from 'crypto';
+import { RoleType } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -25,18 +30,22 @@ export class UserService {
     };
   }
   async removeUser(uuid: string) {
-    const user = await this.prismaService.user.findUniqueOrThrow({
+    const user = await this.prismaService.user.findUnique({
       where: { uuid },
+      include: { role: true },
     });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role.name !== RoleType.user) {
+      throw new BadRequestException('User can not be deleted');
+    }
 
     await this.prismaService.user.delete({
       where: { uuid: user.uuid },
     });
-
-    return {
-      status: 'success',
-      message: 'Account removed successfully!',
-    };
   }
 
   async assignRoleToUser(roleUser: RoleUserDto) {

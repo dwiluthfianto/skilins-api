@@ -7,6 +7,8 @@ import { ContentStatus } from '@prisma/client';
 import parseArrayInput from '@utils/parse-array.util';
 import { FindBlogQueryDto } from '../contents/dto/find-blog-query.dto';
 import { contentFilterByUser } from '@utils/content-filter.util';
+import { processImage } from '@utils/process-image.util';
+import { getRandomImage } from '@utils/process-image.util';
 
 @Injectable()
 export class BlogService {
@@ -34,6 +36,8 @@ export class BlogService {
           'User not found, please make sure you input correct user',
         );
       }
+      const imageUrl = await processImage(getRandomImage(), 'blog');
+
       await prisma.content.create({
         data: {
           type: 'blog',
@@ -48,6 +52,7 @@ export class BlogService {
               },
               create: {
                 name: tag.text,
+                avatar: imageUrl,
               },
             })),
           },
@@ -222,6 +227,8 @@ export class BlogService {
         throw new NotFoundException('Content not found');
       }
 
+      const imageUrl = await processImage(getRandomImage(), 'blog');
+
       const parsedTags = parseArrayInput(tags);
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
 
@@ -241,6 +248,7 @@ export class BlogService {
               },
               create: {
                 name: tag.text,
+                avatar: imageUrl,
               },
             })),
           },

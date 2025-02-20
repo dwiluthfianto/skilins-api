@@ -55,8 +55,11 @@ export class TagService {
   }
 
   async findOneByName(name: string) {
-    const tag = await this.prismaService.tag.findUniqueOrThrow({
-      where: { name },
+    const decodedName = decodeURIComponent(name);
+    const tag = await this.prismaService.tag.findFirst({
+      where: {
+        name: { equals: decodedName, mode: Prisma.QueryMode.insensitive },
+      },
     });
     if (!tag) {
       throw new NotFoundException('Tag not found!');

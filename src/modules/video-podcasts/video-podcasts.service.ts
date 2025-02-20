@@ -13,7 +13,7 @@ import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
 import { UserService } from '@modules/users/users.service';
 import { CategoryService } from '@modules/categories/categories.service';
-
+import { processImage, getRandomImage } from '@utils/process-image.util';
 @Injectable()
 export class VideoPodcastService {
   constructor(
@@ -33,6 +33,8 @@ export class VideoPodcastService {
       const parsedGenres = parseArrayInput(genres);
 
       const parsedTags = parseArrayInput(tags);
+
+      const imageUrl = await processImage(getRandomImage(), 'video');
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
       const userData = await prisma.user.findUniqueOrThrow({
@@ -62,6 +64,7 @@ export class VideoPodcastService {
                 name: tag.text,
               },
               create: {
+                avatar: imageUrl,
                 name: tag.text,
               },
             })),
@@ -80,6 +83,7 @@ export class VideoPodcastService {
                 name: genre.text,
               },
               create: {
+                avatar: imageUrl,
                 name: genre.text,
               },
             })),
@@ -412,6 +416,7 @@ export class VideoPodcastService {
       const parsedTags = parseArrayInput(tags);
 
       const newSlug = await this.slugHelper.generateUniqueSlug(title);
+      const imageUrl = await processImage(getRandomImage(), 'video');
 
       await prisma.content.update({
         where: { uuid, type: 'video' },
@@ -419,12 +424,14 @@ export class VideoPodcastService {
           title,
           thumbnail,
           description,
+          status: 'pending',
           tag: {
             connectOrCreate: parsedTags?.map((tag) => ({
               where: {
                 name: tag.text,
               },
               create: {
+                avatar: imageUrl,
                 name: tag.text,
               },
             })),
@@ -448,6 +455,7 @@ export class VideoPodcastService {
                 name: genre.text,
               },
               create: {
+                avatar: imageUrl,
                 name: genre.text,
               },
             })),
@@ -485,7 +493,7 @@ export class VideoPodcastService {
       );
     }
 
-    const res = await this.prismaService.audioPodcast.findMany({
+    const res = await this.prismaService.videoPodcast.findMany({
       where: {
         creator_id: student.id,
       },
@@ -506,7 +514,7 @@ export class VideoPodcastService {
   }
 
   async summaryVideoStaff() {
-    const res = await this.prismaService.audioPodcast.findMany({
+    const res = await this.prismaService.videoPodcast.findMany({
       include: {
         content: true,
       },

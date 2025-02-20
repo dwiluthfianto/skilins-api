@@ -116,7 +116,11 @@ export class TagController {
     @Body() updateTagDto: UpdateTagDto,
   ) {
     try {
-      const file = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      const isExist = await this.tagService.findOneByUuid(uuid);
+      const file = this.fileUploadService.updateFile(
+        isExist.avatar,
+        files.avatar[0],
+      );
       await this.tagService.updateTag(uuid, {
         ...updateTagDto,
         avatar: file.filePath,
@@ -137,6 +141,8 @@ export class TagController {
   @Roles('staff')
   async remove(@Param('uuid') uuid: string) {
     try {
+      const isExist = await this.tagService.findOneByUuid(uuid);
+      this.fileUploadService.deleteFile(isExist.avatar);
       await this.tagService.removeTag(uuid);
       return SuccessResponse.create(
         null,

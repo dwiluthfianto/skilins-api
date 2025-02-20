@@ -48,23 +48,26 @@ export function contentFilter({
       }
     : {};
 
+  const decodedCategory = decodeURIComponent(category);
   const categoryFilter = category
     ? {
         category: {
           name: {
-            equals: category,
+            equals: decodedCategory,
             mode: Prisma.QueryMode.insensitive,
           },
         },
       }
     : {};
 
+  const decodedGenre = decodeURIComponent(genre);
+
   const genreFilter = genre
     ? {
         genre: {
           some: {
             name: {
-              equals: genre,
+              equals: decodedGenre,
               mode: Prisma.QueryMode.insensitive,
             },
           },
@@ -72,12 +75,14 @@ export function contentFilter({
       }
     : {};
 
+  const decodedTag = decodeURIComponent(tag);
+
   const tagFilter = tag
     ? {
         tag: {
           some: {
             name: {
-              equals: tag,
+              equals: decodedTag,
               mode: Prisma.QueryMode.insensitive,
             },
           },
@@ -130,23 +135,27 @@ export function contentFilterByUser({
     },
   };
 
+  const decodedCategory = decodeURIComponent(category);
+
   const categoryFilter = category
     ? {
         category: {
           name: {
-            equals: category,
+            equals: decodedCategory,
             mode: Prisma.QueryMode.insensitive,
           },
         },
       }
     : {};
 
+  const decodedGenre = decodeURIComponent(genre);
+
   const genreFilter = genre
     ? {
         genre: {
           some: {
             name: {
-              equals: genre,
+              equals: decodedGenre,
               mode: Prisma.QueryMode.insensitive,
             },
           },
@@ -154,12 +163,14 @@ export function contentFilterByUser({
       }
     : {};
 
+  const decodedTag = decodeURIComponent(tag);
+
   const tagFilter = tag
     ? {
         tag: {
           some: {
             name: {
-              equals: tag,
+              equals: decodedTag,
               mode: Prisma.QueryMode.insensitive,
             },
           },

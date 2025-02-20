@@ -54,8 +54,11 @@ export class GenreService {
   }
 
   async findGenreByName(name: string) {
-    const genre = await this.prismaService.genre.findUnique({
-      where: { name },
+    const decodedName = decodeURIComponent(name);
+    const genre = await this.prismaService.genre.findFirst({
+      where: {
+        name: { equals: decodedName, mode: Prisma.QueryMode.insensitive },
+      },
     });
 
     if (!genre) {

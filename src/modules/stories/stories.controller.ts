@@ -115,10 +115,10 @@ export class StoryController {
   @Get('summary-student')
   @UseGuards(RolesGuard)
   @Roles('student')
-  summaryStoryStudent(@Req() req: Request) {
+  async summaryStoryStudent(@Req() req: Request) {
     const user = req.user;
     return SuccessResponse.create(
-      this.storyService.summaryStoryStudent(user['sub']),
+      await this.storyService.summaryStoryStudent(user['sub']),
       'Summary story student successfully fetched!',
       HttpStatus.OK,
     );
@@ -127,9 +127,9 @@ export class StoryController {
   @Get('summary-staff')
   @UseGuards(RolesGuard)
   @Roles('staff')
-  summaryStoryStaff() {
+  async summaryStoryStaff() {
     return SuccessResponse.create(
-      this.storyService.summaryStoryStaff(),
+      await this.storyService.summaryStoryStaff(),
       'Summary story staff successfully fetched!',
       HttpStatus.OK,
     );

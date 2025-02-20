@@ -56,11 +56,11 @@ export class AnalyticsService {
     });
 
     return {
-      totalUsers,
-      activeUsersMonthly,
-      activeUsersDaily,
-      lastMonthActiveUsers,
-      lastDailyActiveUsers,
+      total_users: totalUsers,
+      active_users_monthly: activeUsersMonthly,
+      active_users_daily: activeUsersDaily,
+      last_month_active_users: lastMonthActiveUsers,
+      last_daily_active_users: lastDailyActiveUsers,
     };
   }
 
@@ -102,11 +102,11 @@ export class AnalyticsService {
     });
 
     return {
-      totalContents,
-      popularContent,
-      monthlyContent: {
-        monthlyContentCreate,
-        lastMonthContentCreate,
+      total_contents: totalContents,
+      popular_content: popularContent,
+      monthly_stats: {
+        current_month_created: monthlyContentCreate,
+        last_month_created: lastMonthContentCreate,
       },
     };
   }
@@ -123,7 +123,7 @@ export class AnalyticsService {
           },
         },
       }),
-      novel: await this.prisma.content.count({
+      story: await this.prisma.content.count({
         where: {
           type: 'story',
           created_at: {
@@ -131,7 +131,7 @@ export class AnalyticsService {
           },
         },
       }),
-      audioPodcast: await this.prisma.content.count({
+      audio: await this.prisma.content.count({
         where: {
           type: 'audio',
           created_at: {
@@ -139,7 +139,7 @@ export class AnalyticsService {
           },
         },
       }),
-      pklReport: await this.prisma.content.count({
+      prakerin: await this.prisma.content.count({
         where: {
           type: 'prakerin',
           created_at: {
@@ -147,7 +147,7 @@ export class AnalyticsService {
           },
         },
       }),
-      videoPodcast: await this.prisma.content.count({
+      video: await this.prisma.content.count({
         where: {
           type: 'video',
           created_at: {
@@ -194,8 +194,8 @@ export class AnalyticsService {
     );
 
     return {
-      contentType,
-      trendingStat,
+      content_types: contentType,
+      trending_stat: trendingStat,
     };
   }
 
@@ -249,7 +249,7 @@ export class AnalyticsService {
     }
 
     return {
-      lastSixMonthsReports: monthlyStats,
+      last_six_months_reports: monthlyStats,
     };
   }
 
@@ -323,10 +323,10 @@ export class AnalyticsService {
     );
 
     return {
-      lastThreeMonthsComment: dailyCommentStats,
-      lastThreeMonthsRating: dailyRatingStats,
-      commentTotal,
-      ratingTotal,
+      last_three_months_comments: dailyCommentStats,
+      last_three_months_ratings: dailyRatingStats,
+      comment_total: commentTotal,
+      rating_total: ratingTotal,
     };
   }
 }

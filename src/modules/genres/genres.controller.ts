@@ -110,7 +110,11 @@ export class GenreController {
     @Body() updateGenreDto: UpdateGenreDto,
   ) {
     try {
-      const avatar = this.fileUploadService.handleFileUpload(files.avatar[0]);
+      const isExist = await this.genreService.findGenreByUuid(genreUuid);
+      const avatar = this.fileUploadService.updateFile(
+        isExist.avatar,
+        files.avatar[0],
+      );
       await this.genreService.updateGenreByUuid(genreUuid, {
         ...updateGenreDto,
         avatar: avatar.filePath,
@@ -130,7 +134,10 @@ export class GenreController {
   @Roles('staff')
   async removeGenre(@Param('genreUuid') genreUuid: string) {
     try {
+      const isExist = await this.genreService.findGenreByUuid(genreUuid);
+      this.fileUploadService.deleteFile(isExist.avatar);
       await this.genreService.removeGenreByUuid(genreUuid);
+
       return SuccessResponse.create(
         null,
         'Genre successfully deleted!',

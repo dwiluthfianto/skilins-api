@@ -14,6 +14,8 @@ import { FindContentQueryDto } from '../contents/dto/find-content-query.dto';
 import { contentFilter, contentFilterByUser } from '@utils/content-filter.util';
 import { UserService } from '@modules/users/users.service';
 import { CategoryService } from '@modules/categories/categories.service';
+import { getRandomImage } from '@utils/process-image.util';
+import { processImage } from '@utils/process-image.util';
 
 @Injectable()
 export class StoryService {
@@ -46,6 +48,8 @@ export class StoryService {
       );
     }
 
+    const imageUrl = await processImage(getRandomImage(), 'story');
+
     await this.prismaService.content.create({
       data: {
         type: 'story',
@@ -58,6 +62,7 @@ export class StoryService {
               name: tag.text,
             },
             create: {
+              avatar: imageUrl,
               name: tag.text,
             },
           })),
@@ -75,6 +80,7 @@ export class StoryService {
               name: genre.text,
             },
             create: {
+              avatar: imageUrl,
               name: genre.text,
             },
           })),
@@ -528,6 +534,8 @@ export class StoryService {
     const parsedGenres = parseArrayInput(genres);
     const parsedTags = parseArrayInput(tags);
 
+    const imageUrl = await processImage(getRandomImage(), 'story');
+
     const newSlug = await this.slugHelper.generateUniqueSlug(title);
     await this.prismaService.content.update({
       where: { uuid: contentUuid, type: 'story' },
@@ -535,12 +543,14 @@ export class StoryService {
         title,
         thumbnail,
         description,
+        status: 'pending',
         tag: {
           connectOrCreate: parsedTags?.map((tag) => ({
             where: {
               name: tag.text,
             },
             create: {
+              avatar: imageUrl,
               name: tag.text,
             },
           })),
@@ -553,6 +563,7 @@ export class StoryService {
               name: genre.text,
             },
             create: {
+              avatar: imageUrl,
               name: genre.text,
             },
           })),

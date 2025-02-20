@@ -222,6 +222,7 @@ export class CompetitionService {
           include: {
             submission: {
               select: {
+                uuid: true,
                 content: {
                   select: {
                     title: true,
@@ -249,7 +250,20 @@ export class CompetitionService {
       );
     }
 
-    return competition;
+    const winnersWithScore = await Promise.all(
+      competition.winner.map(async (winner) => ({
+        ...winner,
+        submission: {
+          ...winner.submission,
+          final_score: await this.calculateFinalScore(winner.submission.uuid),
+        },
+      })),
+    );
+
+    return {
+      ...competition,
+      winner: winnersWithScore,
+    };
   }
 
   async getCompetitionBySlug(slug: string) {
@@ -405,9 +419,9 @@ export class CompetitionService {
 
     const userRatingScore = averageUserRating._avg.rating_value ?? 0;
 
-    const finalScore = 0.2 * userRatingScore + 0.8 * normalizedScore;
+    const final_score = 0.2 * userRatingScore + 0.8 * normalizedScore;
 
-    return finalScore;
+    return final_score;
   }
 
   async getWinnersForCompetition(uuid: string) {

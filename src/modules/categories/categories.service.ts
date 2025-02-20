@@ -39,8 +39,8 @@ export class CategoryService {
   }
 
   async findCategoryByName(name: string) {
-    const category = await this.prismaService.category.findUnique({
-      where: { name },
+    const category = await this.prismaService.category.findFirst({
+      where: { name: { equals: name, mode: Prisma.QueryMode.insensitive } },
     });
 
     if (!category) {

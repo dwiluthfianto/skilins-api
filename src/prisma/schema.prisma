@@ -303,6 +303,7 @@ model Submission {
   winner         Winner[]
   score          Score[]
 
+  @@unique([competition_id, student_id, content_id], name: "unique_submission")
   @@index([uuid])
   @@map("submission")
 }
@@ -389,6 +390,7 @@ model Winner {
   submission     Submission  @relation(fields: [submission_id], references: [id], onDelete: Cascade)
   rank           Int
 
+  @@unique([competition_id, submission_id], name: "unique_winner")
   @@index([uuid])
   @@map("winner")
 }
