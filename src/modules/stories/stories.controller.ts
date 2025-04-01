@@ -191,9 +191,10 @@ export class StoryController {
 
   @Get('episodes/:slug')
   @Public()
-  getEpisode(@Param('slug') slug: string, @Query('order') order: number) {
+  async getEpisode(@Param('slug') slug: string, @Query('order') order: number) {
+    const eps = await this.storyService.getEpisode(slug, order);
     return SuccessResponse.create(
-      this.storyService.getEpisode(slug, order),
+      eps,
       'Episode successfully fetched!',
       HttpStatus.OK,
     );
