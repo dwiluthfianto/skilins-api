@@ -1,5 +1,5 @@
 import { PrismaClient, RoleType, SexType } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import * as fs from 'fs';
 import { CUSTOMER_DATA_PATH, processImage } from '@utils/process-image.util';
 import { getRandomImage } from '@utils/process-image.util';

@@ -1,36 +1,34 @@
 # Stage development
 FROM node:22.2.0-alpine AS development
-
 WORKDIR /usr/src/app
 
+# Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
+# Copy app source dan generate Prisma Client
 COPY . .
+RUN npm run prisma:generate
+
+# Stage build
+FROM node:22.2.0-alpine AS build
+WORKDIR /usr/src/app
+
+# Copy dari development stage dengan user yang konsisten
+COPY --from=development /usr/src/app/node_modules ./node_modules
+COPY . .
+
+# Build aplikasi
 RUN npm run build
-RUN npx prisma generate
 
 # Stage production
 FROM node:22.2.0-alpine AS production
-
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
-
 WORKDIR /usr/src/app
 
-# Install build dependencies
-RUN apk add --no-cache make gcc g++ python3
+# Copy artifacts dengan user yang konsisten
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/dist ./dist
 
-# Copy only the necessary files
-COPY package*.json ./
-COPY --from=development /usr/src/app/dist ./dist
-COPY --from=development /usr/src/app/src/prisma/schema.prisma ./src/prisma/schema.prisma
+EXPOSE ${PORT}
 
-# Copy email templates folder
-COPY --from=development /usr/src/app/src/modules/auth/templates ./src/modules/auth/templates
-
-# Install bcrypt and other dependencies
-RUN npm install bcrypt --build-from-source 
-RUN npm install --only=production
-
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "if [ \"$NODE_ENV\" = \"production\" ]; then npm run start:prod; else npm run start:dev; fi"]

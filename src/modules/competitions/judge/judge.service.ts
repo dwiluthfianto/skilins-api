@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RegisterJudgeDto } from '../dto/register-judge.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { Prisma, RoleType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EvaluateSubmissionDto } from '../dto/evaluate-submission.dto';
