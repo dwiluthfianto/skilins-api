@@ -29,8 +29,6 @@ export class EmailService {
 
     const templatePath = path.join(templatesFolderPath, `${templateName}.hbs`);
 
-    console.log(templatePath);
-
     try {
       const templateSource = fs.readFileSync(templatePath, 'utf8');
       const compiledTemplate = handlebars.compile(templateSource);

@@ -266,7 +266,7 @@ export class AuthService {
 
     const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
 
-    await this.emailService.sendVerificationEmail(user.email, verificationUrl);
+    this.emailService.sendVerificationEmail(user.email, verificationUrl);
   }
 
   async registerStudent(authRegisterStudentDto: AuthRegisterStudentDto) {
@@ -315,7 +315,7 @@ export class AuthService {
 
     const verificationUrl = `${process.env.FRONTEND_DOMAIN}/auth/verify-email?token=${token}`;
 
-    await this.emailService.sendVerificationEmail(user.email, verificationUrl);
+    this.emailService.sendVerificationEmail(user.email, verificationUrl);
   }
 
   async refreshTokens(refreshToken: string): Promise<{
