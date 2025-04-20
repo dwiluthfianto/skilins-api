@@ -17,6 +17,7 @@ export class EmailService {
         : 587,
       ignoreTLS: this.configService.get('MAIL_IGNORE_TLS') === 'true',
       secure: this.configService.get('MAIL_SECURE') === 'true',
+      requireTLS: this.configService.get('MAIL_REQUIRE_TLS') === 'true',
       auth: {
         user: this.configService.get('MAIL_USER'),
         pass: this.configService.get('MAIL_PASSWORD'),
@@ -52,6 +53,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
+        from: this.configService.get('MAIL_FROM'),
         to,
         subject,
         html,

@@ -7,10 +7,9 @@ import {
   UseGuards,
   Res,
   Req,
-  UseInterceptors,
   HttpCode,
   HttpStatus,
-  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
 import { UserService } from './users.service';
 import { RoleUserDto } from './dto/role-user.dto';
@@ -19,13 +18,14 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApiBasicAuth, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { FileUploadService } from '../file-upload/file-upload.service';
-
+import { FileUpload } from '@decorators/file-upload.decorator';
+import { ApiException } from '@exceptions/api-exception';
+import { SuccessResponse } from '@utils/api-response.util';
 @ApiTags('User')
 @ApiBasicAuth('JWT-auth')
 @Controller({ path: 'users', version: '1' })
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(RolesGuard)
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -59,25 +59,30 @@ export class UserController {
 
   @Post('update-profile/:uuid')
   @Roles('admin', 'user', 'student', 'staff')
-  @UseInterceptors(FileInterceptor('profile'))
+  @FileUpload()
   @HttpCode(HttpStatus.OK)
   async updateProfile(
     @Param('uuid') uuid: string,
-    @UploadedFile('profile') profile: Express.Multer.File,
-    @Res() res: Response,
+    @UploadedFiles()
+    files: {
+      profile?: Express.Multer.File[];
+    },
   ) {
+    console.log(files);
+
     try {
-      const file = this.fileUploadService.handleFileUpload(profile);
+      const file = this.fileUploadService.handleFileUpload(
+        files.profile[0],
+      );
 
       const result = await this.userService.updateProfile(uuid, file.filePath);
-      return res.status(HttpStatus.OK).json(result);
+      return SuccessResponse.create(
+        result,
+        'Profile updated successfully',
+        HttpStatus.OK,
+      );
     } catch (e) {
-      console.error('Error during profile update:', e.message);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        status: 'failed',
-        message: 'Failed to update profile.',
-        detail: e.message,
-      });
+      throw new ApiException(e.message, e.status);
     }
   }
 

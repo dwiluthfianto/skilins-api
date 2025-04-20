@@ -11,7 +11,10 @@ import path from 'path';
       storage: diskStorage({
         destination: path.join(process.cwd(), 'uploads'),
         filename: (req, file, cb) => {
-          const filename = `${Date.now()}-${file.originalname}`;
+          const timestamp = Date.now();
+          const randomString = Math.random().toString(36).substring(2, 15);
+          const extension = path.extname(file.originalname);
+          const filename = `${timestamp}-${randomString}${extension}`;
           cb(null, filename);
         },
       }),

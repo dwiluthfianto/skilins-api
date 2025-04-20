@@ -136,6 +136,7 @@ export class BlogController {
     try {
       const isExist = await this.blogService.findBlogByUuid(contentUuid);
       this.fileUploadService.deleteFile(isExist.thumbnail);
+      
 
       await this.blogService.removeBlogByUuid(contentUuid);
 

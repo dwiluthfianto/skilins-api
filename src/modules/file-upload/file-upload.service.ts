@@ -88,6 +88,8 @@ export class FileUploadService {
   deleteFile(filename: string) {
     const filePath = this.extractFilePathFromUrl(filename);
 
+    console.log(filePath);
+
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('File not found');
     }

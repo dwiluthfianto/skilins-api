@@ -186,7 +186,7 @@ export class AuthService {
   async login(authEmailLoginDto: AuthEmailLoginDto): Promise<any> {
     const user = await this.prismaService.user.findUnique({
       where: { email: authEmailLoginDto.email },
-      include: { role: true, student: true },
+      include: { role: true },
     });
 
     if (!user) {
@@ -195,8 +195,14 @@ export class AuthService {
       );
     }
 
+
     if (user.role.name === RoleType.student) {
-      if (user.student.status === false) {
+      const student = await this.prismaService.student.findUnique({
+        where: { user_id: user.id },
+      });
+
+      
+      if (!student.status) {
         throw new UnauthorizedException(
           'Student is not verified, please contact staff',
         );
@@ -274,9 +280,6 @@ export class AuthService {
       authRegisterStudentDto.password,
       10,
     );
-    const role = await this.prismaService.role.findUnique({
-      where: { name: RoleType.student },
-    });
 
     const major = await this.prismaService.major.findUnique({
       where: { name: authRegisterStudentDto.major },
@@ -288,7 +291,7 @@ export class AuthService {
         password: hashedPassword,
         full_name: authRegisterStudentDto.full_name,
         email_verified: false,
-        role: { connect: { uuid: role.uuid } },
+        role: { connect: { name: RoleType.user } },
         student: {
           create: {
             nis: authRegisterStudentDto.nis,
